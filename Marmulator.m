@@ -1,0 +1,1004 @@
+function varargout = Marmulator(varargin)
+% MARMULATOR MATLAB code for Marmulator.fig
+%      MARMULATOR, by itself, creates a new MARMULATOR or raises the existing
+%      singleton*.
+%
+%      H = MARMULATOR returns the handle to a new MARMULATOR or the handle to
+%      the existing singleton*.
+%
+%      MARMULATOR('CALLBACK',hObject,eventData,handles,...) calls the local
+%      function named CALLBACK in MARMULATOR.M with the given input arguments.
+%
+%      MARMULATOR('Property','Value',...) creates a new MARMULATOR or raises the
+%      existing singleton*.  Starting from the left, property value pairs are
+%      applied to the GUI before Marmulator_OpeningFcn gets called.  An
+%      unrecognized property name or invalid value makes property application
+%      stop.  All inputs are passed to Marmulator_OpeningFcn via varargin.
+%
+%      *See GUI Options on GUIDE's Tools menu.  Choose "GUI allows only one
+%      instance to run (singleton)".
+%
+% See also: GUIDE, GUIDATA, GUIHANDLES
+
+% Edit the above text to modify the response to help Marmulator
+
+% Last Modified by GUIDE v2.5 13-Oct-2022 13:42:54
+
+% Begin initialization code - DO NOT EDIT
+gui_Singleton = 1;
+gui_State = struct('gui_Name',       mfilename, ...
+                   'gui_Singleton',  gui_Singleton, ...
+                   'gui_OpeningFcn', @Marmulator_OpeningFcn, ...
+                   'gui_OutputFcn',  @Marmulator_OutputFcn, ...
+                   'gui_LayoutFcn',  [] , ...
+                   'gui_Callback',   []);
+if nargin && ischar(varargin{1})
+    gui_State.gui_Callback = str2func(varargin{1});
+end
+
+if nargout
+    [varargout{1:nargout}] = gui_mainfcn(gui_State, varargin{:});
+else
+    gui_mainfcn(gui_State, varargin{:});
+end
+% End initialization code - DO NOT EDIT
+
+
+% --- Executes just before Marmulator is made visible.
+function Marmulator_OpeningFcn(hObject, eventdata, handles, varargin)
+% This function has no output args, see OutputFcn.
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+% varargin   command line arguments to Marmulator (see VARARGIN)
+
+% Choose default command line output for Marmulator
+handles.output = hObject;
+handles.arduino_connected = 0; 
+handles.pump_serial_connected = 0; 
+handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
+%handles.reward_pin = 10; 
+handles.reward_pin = 4; 
+handles.reward_today = 0; % start reward counter at 0 mL 
+handles.calibration_loaded = false; 
+handles.calib_file = []; 
+handles.default_calib_dir = 'C:\MATLAB\eyetracker_calibration_071222\calib_data\calib_coeffs'; 
+handles.base_dir = 'C:\MATLAB\Marmulator\'; 
+handles.subject = []; 
+handles.subject_file = []; 
+curr_date = datestr(now, 'yyyy-mm-dd');
+handles.curr_date = curr_date; 
+
+% load the pump parameters
+handles.ppfile = fullfile(handles.base_dir, 'gui', 'pump_params.mat');
+if exist(handles.ppfile)
+    pp = load(handles.ppfile);
+    handles.reward_vol = pp.reward_vol; 
+    handles.reward_rate = pp.reward_rate; 
+    handles.syringe_diam = pp.syringe_diam; 
+    set(handles.vol_edit, 'String', sprintf('%d', handles.reward_vol)); 
+    set(handles.rate_edit, 'String', sprintf('%0.1f', handles.reward_rate)); 
+    set(handles.diam_edit, 'String', sprintf('%0.2f', handles.syringe_diam)); 
+else
+    handles.reward_vol = str2double(get(handles.vol_edit, 'String'));
+    handles.reward_rate = str2double(get(handles.rate_edit, 'String'));
+    handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
+end
+
+
+flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = flist(~[flist.isdir]); 
+
+handles.expt_params_list = {flist.name}; 
+popup_list_all = ['[select experiment params]', handles.expt_params_list]; 
+set(handles.select_popup, 'String', popup_list_all); 
+
+% set close request function
+%keyboard
+set(handles.figure1, 'CloseRequestFcn', @cleanUpFun); 
+
+set(handles.expt_params_edit, 'String', fullfile(handles.base_dir, 'experiment_params')); 
+
+% Update handles structure
+guidata(hObject, handles);
+
+% UIWAIT makes Marmulator wait for user response (see UIRESUME)
+% uiwait(handles.figure1);
+
+
+% --- Outputs from this function are returned to the command line.
+function varargout = Marmulator_OutputFcn(hObject, eventdata, handles) 
+% varargout  cell array for returning output args (see VARARGOUT);
+% hObject    handle to figure
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Get default command line output from handles structure
+varargout{1} = handles.output;
+
+% --- Executes on button press in connect_push.
+function connect_push_Callback(hObject, eventdata, handles)
+% hObject    handle to connect_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+handles.arduino_comport = get(handles.com_edit, 'String');
+if ~handles.arduino_connected
+    try
+        handles.reward_arduino = arduino(handles.arduino_comport);
+        flush(handles.reward_arduino);
+        %set(gcbo, 'Enable', 'off')
+        handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
+        handles.arduino_connected = 1;
+        set(gcbo, 'String', 'Disconnect')
+    catch me
+        disp(me);
+        disp('Arduino not connected!');
+        handles.arduino_connected = 0;
+    end
+else
+    fid = instrfind('Port', handles.arduino_comport); 
+    fclose(fid); 
+    delete(handles.reward_arduino);
+    handles.reward_arduino = []; 
+    handles.arduino_connected = 0;
+    set(gcbo, 'String', 'Connect Arduino')
+    disp('Arduino disconnected'); 
+end
+
+guidata(hObject, handles);
+
+function com_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of com_edit as text
+%        str2double(get(hObject,'String')) returns contents of com_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function com_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in reward_push.
+function reward_push_Callback(hObject, eventdata, handles)
+% hObject    handle to reward_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+%keyboard
+if handles.arduino_connected
+    handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
+    %WaitSecs(0.1);
+    WaitSecs(0.);
+    handles.reward_arduino.digitalWrite(handles.reward_pin, 0);
+    reward_given = 1;
+elseif handles.pump_serial_connected
+    writeline(handles.reward_serial, 'RUN');
+    reward_given = 1;
+else
+    disp('No connection to arduino');
+    reward_given = 0;
+end
+
+if reward_given
+    curr_date = datestr(now, 'yyyy-mm-dd');
+    if strcmp(handles.curr_date, curr_date)
+        handles.reward_today = handles.reward_today + handles.reward_vol/1e3;
+        set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', handles.reward_today));
+    else % leftover, so save amount and update
+        if ~isempty(handles.subject_file)
+            reward_today = getRewardTodayFromTxt(handles.reward_today_txt);
+            updateSubjectLogTable(handles.subject_file, reward_today, handles.curr_date);
+        end
+        handles.reward_today = 0 + handles.reward_vol/1e3; % reset
+        set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', handles.reward_today));
+        handles.curr_date = curr_date;
+    end
+end
+guidata(hObject, handles);
+
+
+% --- Executes on button press in run_push.
+function run_push_Callback(hObject, eventdata, handles)
+% hObject    handle to run_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+if handles.arduino_connected 
+    ra = handles.reward_arduino; 
+elseif handles.pump_serial_connected
+    ra = handles.reward_serial; 
+else
+    ra = []; 
+end
+
+curr_date = datestr(now, 'yyyy-mm-dd');
+
+if ~isempty(handles.subject_file)
+    handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
+    updateSubjectLogTable(handles.subject_file, handles.reward_today, handles.curr_date);
+end
+
+if ~strcmp(curr_date, handles.curr_date)
+    set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', 0)); 
+    handles.curr_date = curr_date; 
+end
+
+
+subj_tmp = get(handles.subject_edit, 'String'); 
+if isempty(subj_tmp)
+    disp('Please enter a subject name'); 
+    return
+else
+    handles.subject = subj_tmp; 
+end
+
+gaze_offset_x = str2num(get(handles.offset_x_edit, 'String')); 
+gaze_offset_y = str2num(get(handles.offset_y_edit, 'String')); 
+gaze_offset =[gaze_offset_x, gaze_offset_y]; 
+
+repeats_per_loc = str2num(get(handles.repeats_edit, 'String')); 
+response_time = str2num(get(handles.response_time_edit, 'String'));  
+hold_time = str2num(get(handles.hold_time_edit, 'String'));  
+trial_time = str2num(get(handles.trial_time_edit, 'String'));  
+
+session_time = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+
+mouse_for_eye = get(handles.mouse_eye_check, 'Value'); 
+
+require_fix_tr_init = get(handles.require_fix_check, 'Value');  
+fixation_to_init = str2double(get(handles.fixation_edit, 'String')); 
+time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String')); 
+ 
+set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
+EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
+    handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
+    response_time, hold_time, trial_time, session_time, mouse_for_eye,...
+    require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
+    handles.reward_vol/1e3);
+
+if ~isempty(handles.subject_file)
+    %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
+    handles.reward_today = getRewardTodayFromTxt(handles.reward_today_txt); 
+    updateSubjectLogTable(handles.subject_file, handles.reward_today, curr_date);
+end
+guidata(hObject, handles); 
+
+%f = parfeval(@EyeTracker_Calibrate_gui_fcn, 1, ra, handles.reward_pin, handles.subject,...
+%    handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
+%    response_time, hold_time, trial_time, session_time);
+
+
+function offset_x_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to offset_x_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of offset_x_edit as text
+%        str2double(get(hObject,'String')) returns contents of offset_x_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function offset_x_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to offset_x_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function offset_y_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to offset_y_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of offset_y_edit as text
+%        str2double(get(hObject,'String')) returns contents of offset_y_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function offset_y_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to offset_y_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on selection change in select_popup.
+function select_popup_Callback(hObject, eventdata, handles)
+% hObject    handle to select_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns select_popup contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from select_popup
+curridx = get(gcbo, 'Value');
+flist = get(gcbo, 'String');
+if curridx == 1
+    handles.params_file = [];
+    set(handles.hold_time_edit, 'String', '');
+    set(handles.response_time_edit, 'String', '');
+    set(handles.mode_text, 'String', '');
+    set(handles.stim_text, 'String', '');
+    set(handles.n_x_y_string, 'String', '');
+    set(handles.fixation_edit, 'String', ''); 
+    set(handles.time_out_edit, 'String', ''); 
+    set(handles.require_fix_check, 'Value', 0); 
+else
+    handles.params_file = fullfile(handles.expt_params_dir, flist{curridx});
+    handles.params = load(handles.params_file);
+    handles.repeats_per_loc = handles.params.repeats_per_stim;
+    handles.nr_pts_x_y = [handles.params.n_pts_x, handles.params.n_pts_y];
+    handles.hold_time = handles.params.time_to_reward;
+    handles.response_time = handles.params.time_out_after;
+    handles.trial_time = handles.params.presentation_time;
+    if isfield(handles.params, 'require_fix_tr_init')
+        handles.require_fix_tr_init = handles.params.require_fix_tr_init;
+    else
+        handles.require_fix_tr_init = 0;
+    end
+    if isfield(handles.params, 'fixation_to_init')
+        handles.fixation_to_init = handles.params.fixation_to_init;
+    else
+        handles.fixation_to_init = [];
+    end
+    if isfield(handles.params, 'time_out_trial_init_s')
+        handles.time_out_trial_init_s = handles.params.time_out_trial_init_s;
+    else
+        handles.time_out_trial_init_s = [];
+    end
+    
+    
+    %keyboard
+    
+    set(handles.trial_time_edit, 'String', sprintf('%d', handles.trial_time));
+    set(handles.n_x_y_string, 'String', sprintf('[%d, %d]', handles.nr_pts_x_y(1), handles.nr_pts_x_y(2)));
+    set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
+    set(handles.hold_time_edit, 'String', sprintf('%d', handles.hold_time));
+    set(handles.response_time_edit, 'String', sprintf('%d', handles.response_time));
+    set(handles.mode_text, 'String', handles.params.trial_mode);
+    set(handles.stim_text, 'String', handles.params.stim_mode);
+    set(handles.require_fix_check, 'Value', handles.require_fix_tr_init);
+    set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init)); 
+    set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s)); 
+    
+    if ~handles.require_fix_tr_init
+        set(handles.fixation_edit, 'Enable', 'off');
+        set(handles.time_out_edit, 'Enable', 'off');
+    else
+        set(handles.fixation_edit, 'Enable', 'on');
+        set(handles.time_out_edit, 'Enable', 'on');
+    end
+    
+    %keyboard
+    
+    if strcmp(handles.params.trial_mode, 'foraging')
+        set(handles.trial_time_edit,'Enable', 'off');
+        set(handles.hold_time_edit, 'Enable', 'on');
+        set(handles.response_time_edit, 'Enable', 'on');
+    elseif strcmp(handles.params.trial_mode, 'trial')
+        set(handles.trial_time_edit,'Enable', 'on');
+        set(handles.hold_time_edit, 'Enable', 'off');
+        set(handles.response_time_edit, 'Enable', 'off');
+    end
+end
+
+fprintf('loaded params: %s \n', flist{curridx}); 
+disp(handles.params); 
+
+guidata(hObject, handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function select_popup_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to select_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+function expt_params_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to expt_params_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of expt_params_edit as text
+%        str2double(get(hObject,'String')) returns contents of expt_params_edit as a double
+
+handles.expt_params_dir = get(gcbo, 'String'); 
+
+flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = flist(~[flist.isdir]); 
+
+handles.expt_params_list = {flist.name}; 
+popup_list_all = ['[select experiment params]', handles.expt_params_list]; 
+set(handles.select_popup, 'String', popup_list_all); 
+
+% Update handles structure
+guidata(hObject, handles);
+
+
+% --- Executes during object creation, after setting all properties.
+function expt_params_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to expt_params_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function subject_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to subject_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of subject_edit as text
+%        str2double(get(hObject,'String')) returns contents of subject_edit as a double
+
+% load log 
+
+curr_date = {datestr(now, 'yyyy-mm-dd')};
+if ~isempty(handles.subject) && ~isempty(handles.subject_file)
+    updateSubjectLogTable(handles.subject_file, handles.reward_today, handles.curr_date)
+end
+
+new_subject = get(gcbo, 'String'); 
+
+handles.subject = new_subject; 
+%handles.reward_total = 0; 
+log_dir = fullfile(handles.base_dir, 'subject_logs');
+handles.subject_file = fullfile(log_dir, [handles.subject '.mat']); 
+if ~exist(handles.subject_file, 'file')
+    questans = questdlg(sprintf('No subject log exists for %s. Would you like to make one?', handles.subject),...
+        'Create new file'); 
+    if strcmp(questans, 'Yes')
+        handles.reward_total = 0; 
+        handles.subject_log_table = table(curr_date, handles.reward_total, 'VariableNames',...
+            {'dates', 'reward_vol'}); 
+        subject_log_table = handles.subject_log_table; 
+        save(handles.subject_file, 'subject_log_table');
+        handles.reward_today = 0; 
+    else
+        handles.subject_file = []; 
+        handles.reward_today = 0; 
+    end
+else
+    %keyboard
+    sf = load(handles.subject_file);
+    handles.subject_log_table = sf.subject_log_table;
+    curridx = find(strcmp(handles.subject_log_table.dates, curr_date));
+    if ~isempty(curridx)
+        handles.reward_today = handles.subject_log_table.reward_vol(curridx);
+    else
+        handles.reward_today  = 0;
+    end
+   % keyboard 
+end
+
+handles.curr_date = curr_date; 
+set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', handles.reward_today)); 
+
+guidata(hObject, handles); 
+
+   
+
+% --- Executes during object creation, after setting all properties.
+function subject_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to subject_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+function calib_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to calib_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of calib_edit as text
+%        str2double(get(hObject,'String')) returns contents of calib_edit as a double
+if isempty(get(gcbo, 'String'))
+    set(handles.offset_y_edit, 'Enable', 'on');
+    set(handles.offset_x_edit, 'Enable', 'on');
+end
+guidata(hObject, handles); 
+
+
+
+% --- Executes during object creation, after setting all properties.
+function calib_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to calib_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+% --- Executes on button press in browse_calib_push.
+function browse_calib_push_Callback(hObject, eventdata, handles)
+% hObject    handle to browse_calib_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+[fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load calibration file',handles.default_calib_dir); 
+%keyboard
+if ~isempty(fname_tmp) && all(fname_tmp ~= 0)
+    handles.calib_file = fullfile(pname_tmp, fname_tmp);
+    handles.calibration_loaded = true;
+    set(handles.calib_edit, 'String', handles.calib_file);
+    set(handles.offset_y_edit, 'String', '[]');
+    set(handles.offset_x_edit, 'String', '[]');
+    set(handles.offset_y_edit, 'Enable', 'off');
+    set(handles.offset_x_edit, 'Enable', 'off');
+else
+    set(handles.offset_y_edit, 'Enable', 'on');
+    set(handles.offset_x_edit, 'Enable', 'on');
+    handles.calibration_loaded = false;
+    set(handles.calib_edit, 'String', ''); 
+    handles.calib_file = [];
+    fprintf('No calib loaded\n');
+end
+
+guidata(hObject, handles);
+
+
+function repeats_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to repeats_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of repeats_edit as text
+%        str2double(get(hObject,'String')) returns contents of repeats_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function repeats_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to repeats_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function response_time_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to response_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of response_time_edit as text
+%        str2double(get(hObject,'String')) returns contents of response_time_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function response_time_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to response_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function hold_time_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to hold_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of hold_time_edit as text
+%        str2double(get(hObject,'String')) returns contents of hold_time_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function hold_time_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to hold_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+% --- Executes during object creation, after setting all properties.
+function n_x_y_string_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to n_x_y_string (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function trial_time_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to trial_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of trial_time_edit as text
+%        str2double(get(hObject,'String')) returns contents of trial_time_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function trial_time_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to trial_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in refresh_push.
+function refresh_push_Callback(hObject, eventdata, handles)
+% hObject    handle to refresh_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
+
+flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = flist(~[flist.isdir]); 
+
+handles.expt_params_list = {flist.name}; 
+popup_list_all = ['[select experiment params]', handles.expt_params_list]; 
+set(handles.select_popup, 'String', popup_list_all); 
+
+% Update handles structure
+guidata(hObject, handles);
+
+
+% --- Executes on button press in mouse_eye_check.
+function mouse_eye_check_Callback(hObject, eventdata, handles)
+% hObject    handle to mouse_eye_check (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of mouse_eye_check
+
+
+% --- Executes on button press in require_fix_check.
+function require_fix_check_Callback(hObject, eventdata, handles)
+% hObject    handle to require_fix_check (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of require_fix_check
+
+handles.require_fix_tr_init = get(gcbo, 'Value');
+
+if handles.require_fix_tr_init
+    set(handles.fixation_edit, 'Enable', 'on');
+    set(handles.time_out_edit, 'Enable', 'on');
+else
+    set(handles.fixation_edit, 'Enable', 'off');
+    set(handles.time_out_edit, 'Enable', 'off');
+end
+guidata(hObject, handles);
+
+
+
+function fixation_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to fixation_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of fixation_edit as text
+%        str2double(get(hObject,'String')) returns contents of fixation_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function fixation_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to fixation_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function time_out_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to time_out_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of time_out_edit as text
+%        str2double(get(hObject,'String')) returns contents of time_out_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function time_out_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to time_out_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function com_serial_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to com_serial_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of com_serial_edit as text
+%        str2double(get(hObject,'String')) returns contents of com_serial_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function com_serial_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to com_serial_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in connect_serial_push.
+function connect_serial_push_Callback(hObject, eventdata, handles)
+% hObject    handle to connect_serial_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+handles.pump_serial_comport = get(handles.com_serial_edit, 'String');
+if ~handles.pump_serial_connected
+    try
+        handles.reward_serial = serialport(handles.pump_serial_comport, 19200); 
+        flush(handles.reward_serial);
+        %set(gcbo, 'Enable', 'off')
+        handles.pump_serial_connected = 1;
+        set(gcbo, 'String', 'Disconnect')
+        % keyboard
+        disp('Serial connected');
+        
+        sendParamsToPump(handles.reward_serial, handles.reward_vol, ...
+            handles.reward_rate, handles.syringe_diam); 
+
+    catch me
+        disp(me);
+        disp('Serial not connected!');
+        handles.arduino_connected = 0;
+    end
+else
+    %fid = instrfind('Port', handles.pump_serial_comport);
+    %fclose(fid);
+    delete(handles.reward_serial);
+    handles.reward_serial = [];
+    handles.pump_serial_connected = 0;
+    set(gcbo, 'String', 'Connect Serial')
+    disp('Pump via serial disconnected');
+end
+
+guidata(hObject, handles);
+
+
+
+function vol_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to vol_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of vol_edit as text
+%        str2double(get(hObject,'String')) returns contents of vol_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function vol_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to vol_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function rate_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to rate_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of rate_edit as text
+%        str2double(get(hObject,'String')) returns contents of rate_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function rate_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to rate_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function diam_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to diam_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of diam_edit as text
+%        str2double(get(hObject,'String')) returns contents of diam_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function diam_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to diam_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in send_params_push.
+function send_params_push_Callback(hObject, eventdata, handles)
+% hObject    handle to send_params_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if handles.pump_serial_connected
+    handles.reward_vol = str2double(get(handles.vol_edit, 'String'));
+    handles.reward_rate = str2double(get(handles.rate_edit, 'String'));
+    handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
+    
+    reward_vol = handles.reward_vol;
+    reward_rate = handles.reward_rate;
+    syringe_diam = handles.syringe_diam;
+    
+    sendParamsToPump(handles.reward_serial, reward_vol, reward_rate, syringe_diam); 
+
+    lastUpdate = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
+    
+    save(handles.ppfile, 'reward_vol', 'reward_rate', 'syringe_diam', 'lastUpdate');
+    disp('Updated pump params file');
+    
+else
+    disp('No serial connection');
+end
+
+guidata(hObject, handles);
+
+function sendParamsToPump(pumphand, reward_vol, reward_rate, syringe_diam)
+
+pausetime = 0.1;
+configureTerminator(pumphand,'CR')
+diam_str = sprintf('DIA %0.2f', syringe_diam);
+writeline(pumphand, diam_str);
+WaitSecs(pausetime);
+rat_str = sprintf('RAT %0.2f MM', reward_rate);
+writeline(pumphand, rat_str);
+WaitSecs(pausetime);
+writeline(pumphand, 'DIR INF');
+WaitSecs(pausetime);
+vol_units_str = sprintf('VOL UL');
+writeline(pumphand, vol_units_str);
+WaitSecs(pausetime);
+vol_str = sprintf('VOL %0.2f', reward_vol);
+writeline(pumphand, vol_str);
+WaitSecs(pausetime);
+writeline(pumphand, 'LN 1');
+WaitSecs(pausetime);
+writeline(pumphand, 'TRG T2');
+WaitSecs(pausetime);
+disp('Sent pump parameters:');
+disp(diam_str);
+disp(rat_str);
+disp(vol_units_str);
+disp(vol_str);
+
+function updateSubjectLogTable(subject_file, reward_today_vol, curr_date)
+
+sf = load(subject_file);
+subject_log_table = sf.subject_log_table;
+curridx = find(strcmp(subject_log_table.dates, curr_date));
+
+if ~isempty(curridx)
+    subject_log_table.reward_vol(curridx) = reward_today_vol; 
+else
+    subject_log_table(end+1,:) = {curr_date, reward_today_vol}; 
+end
+
+%subject_log_table
+save(subject_file, 'subject_log_table');
+fprintf('Updated subject file %s\n', subject_file); 
+
+
+function reward_today = getRewardTodayFromTxt(reward_today_txt_hand)
+reward_today = str2double(char(regexp(get(reward_today_txt_hand, 'String'), '\d*\.\d*', 'match')));
+    
+function cleanUpFun(hObject, eventdata, handles)
+
+h = guidata(hObject); 
+if ~isempty(h.subject_file)
+    reward_today = getRewardTodayFromTxt(h.reward_today_txt); 
+    updateSubjectLogTable(h.subject_file, reward_today, h.curr_date);
+end
+
+if h.arduino_connected
+    fid = instrfind('Port', h.arduino_comport);
+    fclose(fid);
+    delete(h.reward_arduino);
+    disp('Arduino disconnected');
+end
+
+if h.pump_serial_connected
+    delete(h.reward_serial);
+    disp('Pump via serial disconnected');
+end
+
+delete(hObject); 
