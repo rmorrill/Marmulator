@@ -2,7 +2,7 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     subject, expt_params, calib_fname, gaze_offset, repeats_per_stim, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
-    reward_today_hand, reward_vol)
+    reward_today_hand, reward_vol, setup_config)
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -48,15 +48,14 @@ s = load(expt_params);
 % unpack everything
 save_params_name = s.save_params_name;
 save_params_here = s.save_params_here;
-eyetracker_toolbox_dir = s.eyetracker_toolbox_dir;
-save_data_dir = s.save_data_dir;
+eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
 window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
 screen_dist_cm = s.screen_dist_cm;
 screen_width_cm = s.screen_width_cm;
 screen_ht_cm = s.screen_ht_cm;
-screenid_stim = s.screenid_stim;
-screenid_ctrl = s.screenid_ctrl;
+screenid_stim = setup_config.screenid_stim;
+screenid_ctrl = setup_config.screenid_ctrl;
 calibration_win_len = s.calibration_win_len;
 calibration_win_ht = s.calibration_win_ht;
 n_pts_x = s.n_pts_x;
@@ -133,19 +132,21 @@ else
     stimulus_pre_dot_disappear = 0;
 end
 
-if isfield(s, 'apply_gaze_center_adj')
-    gaze_center_adj_y = s.gaze_center_adj_y;
-    gaze_center_adj_x = s.gaze_center_adj_x;
-    apply_gaze_center_adj = s.apply_gaze_center_adj;
-else
-    % offset in y
-    gaze_center_adj_y = 116;
-    gaze_center_adj_x = 0;
-    apply_gaze_center_adj = true;
-end
+gaze_center_adj_x = setup_config.default_gaze_center_adjust(1); 
+gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
+apply_gaze_center_adj = true;
 
-gaze_center_adj_y = 210;
-
+% if isfield(s, 'apply_gaze_center_adj')
+%     gaze_center_adj_y = s.gaze_center_adj_y;
+%     gaze_center_adj_x = s.gaze_center_adj_x;
+%     apply_gaze_center_adj = s.apply_gaze_center_adj;
+% else
+%     % offset in y
+%     gaze_center_adj_y = 116;
+%     gaze_center_adj_x = 0;
+%     apply_gaze_center_adj = true;
+% end
+% gaze_center_adj_y = 210;
 
 if isfield(s, 'wake_up_trials')
     wake_up_trials = s.wake_up_trials;
@@ -156,28 +157,32 @@ if isfield(s, 'wake_up_trials')
     wake_up_stim_size_y = s.wake_up_stim_size_y;
 else
     wake_up_trials = false;
-    wake_up_every = [3 5];
-    wake_up_tr_dur = 6;
-    wake_up_img_fold = 'C:\MATLAB\eyetracker_calibration_071222\stim\naturalistic_scenes';
-    wake_up_stim_size_x = 592;
-    wake_up_stim_size_y = 444;
+    wake_up_every = [];
+    wake_up_tr_dur = [];
+    wake_up_img_fold = '';
+    wake_up_stim_size_x = [];
+    wake_up_stim_size_y = [];
 end
-
-
-% if isfield(s, 'require_fix_tr_init')
-%     require_fix_tr_init =  s.require_fix_tr_init;
-%     fixation_to_init= s.fixation_to_init;
-%     time_out_trial_init_s  = s.time_out_trial_init_s;
-% else
-%     % require fixation for trial start
-%     require_fix_tr_init = false;
-%     fixation_to_init = 1000;
-%     time_out_trial_init_s = 10;
-% end
-
 
 start_rew_vol_str = get(reward_today_hand, 'String');
 start_reward_vol = str2double(char(regexp(start_rew_vol_str, '\d*\.\d*', 'match')));
+
+expt_type = 'calibration';
+curr_date = datestr(now, 'yyyy-mm-dd'); 
+save_base_local = setup_config.save_dir_local;
+save_base_remote = setup_config.save_dir_remote; 
+
+save_data_dir = fullfile(save_base_local, subject, curr_date, expt_type); 
+if ~exist(save_data_dir, 'dir')
+    mkdir(save_data_dir); 
+end
+
+if ~isempty(save_base_remote)
+    save_data_dir_remote = fullfile(save_base_remote, subject, curr_date, expt_type);
+    if ~exist(save_data_dir_remote, 'dir')
+        mkdir(save_data_dir_remote);
+    end
+end
 
 %eye_method = 'mouse';
 %%
@@ -1274,9 +1279,18 @@ punish.sound_file = punish_sound_file;
 
 %% save data
 savefname = sprintf('calib_%s_%s.mat', subject, session_time);
-
 save(fullfile(save_data_dir, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
 fprintf('session data saved to %s\n', fullfile(save_data_dir, savefname));
+
+% try to save to remote 
+try 
+    save(fullfile(save_data_dir_remote, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
+    fprintf('remote save: session data saved to %s\n', fullfile(save_data_dir_remote, savefname));
+catch me
+    disp(me); 
+    disp('failed to save session data to remote'); 
+end
+
 
 %% execute plots automatically
 

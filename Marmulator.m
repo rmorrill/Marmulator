@@ -54,6 +54,27 @@ function Marmulator_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for Marmulator
 handles.output = hObject;
+
+% first check for setup params
+m = mfilename('fullpath'); 
+mdir = fileparts(m); 
+setup_params_file = fullfile(mdir, 'setup_config.mat'); 
+if ~exist(setup_params_file, 'file')
+    % complain 
+    warndlg(sprintf('No setup config found in %s, edit and run setup_marmulator.m', mdir), 'Setup not found'); 
+    handles.sc = []; 
+    handles.base_dir = mdir; 
+    handles.default_calib_dir = mdir; 
+else
+    sc = load(setup_params_file); 
+    set(handles.com_serial_edit, 'String', sc.serial_pump_comport); 
+    set(handles.com_edit, 'String', sc.arduino_pump_comport); 
+    set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
+    handles.base_dir = sc.marmulator_base_dir;
+    handles.default_calib_dir = sc.save_dir_local; 
+    handles.setup_config = sc; 
+end
+
 handles.arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
@@ -62,15 +83,20 @@ handles.reward_pin = 4;
 handles.reward_today = 0; % start reward counter at 0 mL 
 handles.calibration_loaded = false; 
 handles.calib_file = []; 
-handles.default_calib_dir = 'C:\MATLAB\eyetracker_calibration_071222\calib_data\calib_coeffs'; 
-handles.base_dir = 'C:\MATLAB\Marmulator\'; 
+
 handles.subject = []; 
 handles.subject_file = []; 
 curr_date = datestr(now, 'yyyy-mm-dd');
 handles.curr_date = curr_date; 
 
+% ensure that directories exist 
+ppdir = fullfile(handles.base_dir, 'gui'); 
+if ~exist(ppdir) 
+    mkdir(ppdir); 
+end
+
 % load the pump parameters
-handles.ppfile = fullfile(handles.base_dir, 'gui', 'pump_params.mat');
+handles.ppfile = fullfile(ppdir, 'pump_params.mat');
 if exist(handles.ppfile)
     pp = load(handles.ppfile);
     handles.reward_vol = pp.reward_vol; 
@@ -84,7 +110,6 @@ else
     handles.reward_rate = str2double(get(handles.rate_edit, 'String'));
     handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
 end
-
 
 flist = dir([handles.expt_params_dir '\*.mat']); 
 flist = flist(~[flist.isdir]); 
@@ -213,6 +238,12 @@ function run_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
+if ~isfield(handles, 'params_file') || isempty(handles.params_file)
+    fprintf('No expt params file selected!\n'); 
+    return
+end
+
+
 if handles.arduino_connected 
     ra = handles.reward_arduino; 
 elseif handles.pump_serial_connected
@@ -264,7 +295,7 @@ EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
-    handles.reward_vol/1e3);
+    handles.reward_vol/1e3, handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -474,6 +505,9 @@ new_subject = get(gcbo, 'String');
 handles.subject = new_subject; 
 %handles.reward_total = 0; 
 log_dir = fullfile(handles.base_dir, 'subject_logs');
+if ~exist(log_dir)
+    mkdir(log_dir); 
+end
 handles.subject_file = fullfile(log_dir, [handles.subject '.mat']); 
 if ~exist(handles.subject_file, 'file')
     questans = questdlg(sprintf('No subject log exists for %s. Would you like to make one?', handles.subject),...
