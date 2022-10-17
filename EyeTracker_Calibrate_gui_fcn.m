@@ -1278,6 +1278,10 @@ savefname = sprintf('calib_%s_%s.mat', subject, session_time);
 save(fullfile(save_data_dir, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
 fprintf('session data saved to %s\n', fullfile(save_data_dir, savefname));
 
+%% write to session logs 
+log_dir = 'C:/MATLAB/Marmulator/subject_logs_bysessions';
+logData_bysession(log_dir,fullfile(save_data_dir, savefname)); 
+
 %% execute plots automatically
 
 if contains(calib_settings.expt_params,'center_point')
