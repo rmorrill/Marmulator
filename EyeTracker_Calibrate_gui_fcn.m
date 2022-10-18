@@ -767,7 +767,11 @@ for i = 1:n_trs_tot
     eye_data_qual_curr = nan(1,stim_frames);
     eye_in_bb_curr = nan(1,stim_frames);
     
-    end_stim = 0;
+    if trial_init_timed_out(i)
+        end_stim = 1;
+    else
+        end_stim = 0;
+    end
     blink_ctr = 0;
     rsvp_ctr = 1; 
     rsvp_break_ctr = 0; 
@@ -1036,7 +1040,9 @@ for i = 1:n_trs_tot
         end
         
         % check if we need to end
-        if strcmp(trial_mode, 'trial') || seqidx == 0
+        if trial_init_timed_out(i)
+             end_stim = 1;
+        elseif strcmp(trial_mode, 'trial') || seqidx == 0
             if  seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
@@ -1061,8 +1067,6 @@ for i = 1:n_trs_tot
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
                 end
             end
-        elseif trial_init_timed_out(i)
-            end_stim = 1;
         end
         
         [~,~,kCode] = KbCheck(0);
@@ -1085,11 +1089,6 @@ for i = 1:n_trs_tot
         if end_stim
             calib_end_t(i) = GetSecs()-t_start_sec;
         end
-        
-        %Screen('FillRect', win, bg_col_val);
-        %Screen('FillRect', win_ctrl, bg_col_val);
-        %vbl = Screen('Flip', win, vbl + halfifi);
-        %vbl2 = Screen('Flip', win_ctrl, vbl + halfifi);
         
         if end_stim
            % sca
@@ -1154,11 +1153,7 @@ for i = 1:n_trs_tot
                     fprintf('****REWARD TRIAL %d\n', i);
                     if play_reward_sound
                         sound(aud_y, aud_fs);
-                        %PsychPortAudio('Start', pa, 1);
-                        %play(aud_playr);
-                        %play(aud_playr);
                         disp('sound played');
-                        %get(aud_playr)
                     end
                     if ~isempty(reward_pumphand)
                         reward_time(i) = GetSecs()-t_start_sec;
@@ -1250,8 +1245,8 @@ else
     calib.n_completed = i;
 end
 calib.pts = all_pts;
-calib_st_t(isnan(calib_st_t)) = []; 
-calib_end_t(isnan(calib_end_t)) = []; 
+% calib_st_t(isnan(calib_st_t)) = []; 
+% calib_end_t(isnan(calib_end_t)) = []; 
 calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
 calib.time_to_bounding_box = time_to_bb;
