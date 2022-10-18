@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 18-Oct-2022 17:56:31
+% Last Modified by GUIDE v2.5 18-Oct-2022 19:06:47
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -289,13 +289,16 @@ mouse_for_eye = get(handles.mouse_eye_check, 'Value');
 require_fix_tr_init = get(handles.require_fix_check, 'Value');  
 fixation_to_init = str2double(get(handles.fixation_edit, 'String')); 
 time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String')); 
+
+n_rsvp = str2double(get(handles.n_rsvp_edit, 'String')); 
+break_after = str2double(get(handles.break_after_edit, 'String')); 
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
-    handles.reward_vol/1e3, handles.punish_time , handles.setup_config);
+    handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -371,10 +374,12 @@ if curridx == 1
     set(handles.mode_text, 'String', '');
     set(handles.stim_text, 'String', '');
     set(handles.n_x_y_string, 'String', '');
-    set(handles.fixation_edit, 'String', ''); 
-    set(handles.time_out_edit, 'String', ''); 
-    set(handles.require_fix_check, 'Value', 0); 
-    set(handles.punish_time_edit, 'String', ''); 
+    set(handles.fixation_edit, 'String', '');
+    set(handles.time_out_edit, 'String', '');
+    set(handles.require_fix_check, 'Value', 0);
+    set(handles.punish_time_edit, 'String', '');
+    set(handles.n_rsvp_edit, 'String', '');
+    set(handles.break_after_edit, 'String', '');
 else
     handles.params_file = fullfile(handles.expt_params_dir, flist{curridx});
     handles.params = load(handles.params_file);
@@ -401,18 +406,37 @@ else
         handles.time_out_trial_init_s = [];
     end
     
+    if isfield(handles.params, 'n_rsvp')
+        handles.n_rsvp = handles.params.n_rsvp; 
+    else
+        handles.n_rsvp = []; 
+    end
+    
+    if isfield(handles.params, 'break_after')
+        handles.break_after = handles.params.break_after; 
+    else
+        handles.break_after = []; 
+    end
+    
     %keyboard
     set(handles.trial_time_edit, 'String', sprintf('%d', handles.trial_time));
     set(handles.n_x_y_string, 'String', sprintf('[%d, %d]', handles.nr_pts_x_y(1), handles.nr_pts_x_y(2)));
     set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
     set(handles.hold_time_edit, 'String', sprintf('%d', handles.hold_time));
     set(handles.response_time_edit, 'String', sprintf('%d', handles.response_time));
-    set(handles.mode_text, 'String', handles.params.trial_mode);
+    if isfield(handles.params, 'n_rsvp') && handles.params.n_rsvp > 1
+        handles.trial_mode = 'rsvp';
+    else
+        handles.trial_mode = handles.params.trial_mode;
+    end
+    set(handles.mode_text, 'String', handles.trial_mode);
     set(handles.stim_text, 'String', handles.params.stim_mode);
     set(handles.require_fix_check, 'Value', handles.require_fix_tr_init);
-    set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init)); 
-    set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s)); 
-    set(handles.punish_time_edit, 'String', num2str(handles.punish_time)); 
+    set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init));
+    set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s));
+    set(handles.punish_time_edit, 'String', num2str(handles.punish_time));
+    set(handles.n_rsvp_edit, 'String', num2str(handles.n_rsvp)); 
+    set(handles.break_after_edit, 'String', num2str(handles.break_after)); 
     
     if ~handles.require_fix_tr_init
         set(handles.fixation_edit, 'Enable', 'off');
@@ -424,14 +448,24 @@ else
     
     %keyboard
     
-    if strcmp(handles.params.trial_mode, 'foraging')
+    if strcmp(handles.trial_mode, 'foraging')
         set(handles.trial_time_edit,'Enable', 'off');
         set(handles.hold_time_edit, 'Enable', 'on');
         set(handles.response_time_edit, 'Enable', 'on');
-    elseif strcmp(handles.params.trial_mode, 'trial')
+        set(handles.n_rsvp_edit, 'Enable', 'off'); 
+        set(handles.break_after_edit, 'Enable', 'off'); 
+    elseif strcmp(handles.trial_mode, 'trial')
         set(handles.trial_time_edit,'Enable', 'on');
         set(handles.hold_time_edit, 'Enable', 'off');
         set(handles.response_time_edit, 'Enable', 'off');
+        set(handles.n_rsvp_edit, 'Enable', 'off'); 
+        set(handles.break_after_edit, 'Enable', 'off'); 
+    elseif strcmp(handles.trial_mode, 'rsvp')
+        set(handles.trial_time_edit,'Enable', 'on');
+        set(handles.hold_time_edit, 'Enable', 'off');
+        set(handles.response_time_edit, 'Enable', 'off');
+        set(handles.n_rsvp_edit, 'Enable', 'on'); 
+        set(handles.break_after_edit, 'Enable', 'on'); 
     end
 end
 
@@ -1053,6 +1087,52 @@ function punish_time_edit_Callback(hObject, eventdata, handles)
 % --- Executes during object creation, after setting all properties.
 function punish_time_edit_CreateFcn(hObject, eventdata, handles)
 % hObject    handle to punish_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function n_rsvp_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to n_rsvp_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of n_rsvp_edit as text
+%        str2double(get(hObject,'String')) returns contents of n_rsvp_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function n_rsvp_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to n_rsvp_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+
+function break_after_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to break_after_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of break_after_edit as text
+%        str2double(get(hObject,'String')) returns contents of break_after_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function break_after_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to break_after_edit (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
 

@@ -1,8 +1,8 @@
 function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
-    subject, expt_params, calib_fname, gaze_offset, repeats_per_stim, time_out_after, ...
+    subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
-    reward_today_hand, reward_vol, punish_length_ms, setup_config)
+    reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, setup_config)
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -60,7 +60,7 @@ calibration_win_len = s.calibration_win_len;
 calibration_win_ht = s.calibration_win_ht;
 n_pts_x = s.n_pts_x;
 n_pts_y = s.n_pts_y;
-%repeats_per_stim = s.repeats_per_stim;
+%trs_per_location = s.trs_per_location;
 %presentation_time = s.presentation_time;
 inter_stim_interval = s.inter_stim_interval;
 iti_random = s.iti_random;
@@ -91,7 +91,7 @@ reverse_rate = s.reverse_rate;
 reverse_rate_sz = s.reverse_rate_sz;
 draw_gaze_pt = s.draw_gaze_pt;
 n_gaze_pts_draw = s.n_gaze_pts_draw;
-dot_col = s.dot_col;
+gaze_pt_dot_col = s.dot_col;
 gaze_pt_sz = s.gaze_pt_sz;
 draw_retain_bb_pts = s.draw_retain_bb_pts;
 color_shift_feedback = s.color_shift_feedback;
@@ -133,21 +133,30 @@ else
     stimulus_pre_dot_disappear = 0;
 end
 
+%% rsvp setup
+% rsvp will use presentation time for each stimulus duration
+if isfield(s, 'rsvp_iti_t')
+    rsvp_iti_t = s.rsvp_iti_t;
+else
+    rsvp_iti_t = 0;
+end
+
+if isempty(n_rsvp)
+    n_rsvp = 1; 
+end
+
+if n_rsvp>1
+    rsvp_mode = true;
+else
+    rsvp_mode = false;
+end
+
+image_order = 'random'; 
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1); 
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
 
-%% rsvp setup
-% rsvp will use presentation time for each stimulus duration
-n_rsvp = 3; 
-rsvp_iti_t = 300; 
-if n_rsvp>1
-    rsvp_mode = true; 
-else
-    rsvp_mode = false; 
-end
 
-image_order = 'random'; 
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -259,9 +268,9 @@ pupil_size_x = [];
 pupil_size_y = [];
 
 idx_all = 0;
-dot_cols = round(repmat(dot_col', [1,n_gaze_pts_draw])*255);
+gaze_pt_dot_cols = round(repmat(gaze_pt_dot_col', [1,n_gaze_pts_draw])*255);
 alphas = linspace(0, 255, n_gaze_pts_draw);
-rgba_cols = [dot_cols; alphas];
+rgba_cols = [gaze_pt_dot_cols; alphas];
 dotsz = gaze_pt_sz;
 
 % setup for images
@@ -482,17 +491,17 @@ else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
 end
 
-n_trs_tot = n_calib_pts*repeats_per_stim;
+n_trs_tot = n_calib_pts*trs_per_location;
 
 
 tr_seq = []; % trial sequence - note that this determines the position of stimuli only. 
 % img_seq determines the sequence of images
 if strcmp(position_order, 'random')
-    for q = 1:repeats_per_stim
+    for q = 1:trs_per_location
         tr_seq = [tr_seq randperm(n_calib_pts)];
     end
 else
-    tr_seq = repmat(1:n_calib_pts, 1, repeats_per_stim);
+    tr_seq = repmat(1:n_calib_pts, 1, trs_per_location);
 end
 
 % set up img sequence 
@@ -539,7 +548,7 @@ end
 
 
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
-    n_trs_tot = repeats_per_stim;
+    n_trs_tot = trs_per_location;
 end
 
 image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
@@ -916,7 +925,7 @@ for i = 1:n_trs_tot
                         curr_x = mvdot_coords(1);
                         curr_y = mvdot_coords(2);
                         
-                        if stimulus_pre_dot
+                        if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         end
@@ -933,7 +942,7 @@ for i = 1:n_trs_tot
                         % for movies, re-draw dots
                         Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                             dotsz, rgba_cols(:,end), [], 1);
-                        if stimulus_pre_dot
+                        if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         end
@@ -943,7 +952,7 @@ for i = 1:n_trs_tot
                         %Screen('DrawDots', win, all_pts(seqidx,:), 5, blackcol, [], 1);
                         Screen('FillRect', win_ctrl, rect_col, stim_rect);
                         %Screen('DrawDots', win_ctrl, all_pts(seqidx,:), 5, blackcol, [], 1)
-                        if stimulus_pre_dot
+                        if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         end
@@ -1032,11 +1041,6 @@ for i = 1:n_trs_tot
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
             rsvpfridx = 1;
-            % change the image
-%             img_idx = img_idx + 1;
-%             if img_idx > nr_imgs
-%                 img_idx = 1;
-%             end
         end
         
         % check if we need to end
@@ -1052,7 +1056,7 @@ for i = 1:n_trs_tot
             if rsvp_mode
                 if rsvp_ctr > n_rsvp
                     end_stim = 1;
-                elseif rsvp_break_ctr >= round(time_out_after/1e3/ifi)
+                elseif rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                     end_stim = 1; 
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
                 end
@@ -1125,7 +1129,7 @@ for i = 1:n_trs_tot
                     
                 elseif strcmp(trial_mode, 'foraging')
                     if rsvp_mode
-                        if rsvp_break_ctr >= round(time_out_after/1e3/ifi)
+                        if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                             reward_this_trial = false;
                         else
                             reward_this_trial = true;
@@ -1238,7 +1242,7 @@ sca
 %% gather data for save
 calib.n_pts_x = n_pts_x;
 calib.n_pts_y = n_pts_y;
-calib.repeats_per_stim = repeats_per_stim;
+calib.trs_per_location = trs_per_location;
 if any(trial_aborted)
     calib.n_completed = find(trial_aborted) - 1;
 else
@@ -1294,7 +1298,7 @@ calib_settings.bounding_box_x = unique(bounding_rects(:,3)-bounding_rects(:,1));
 calib_settings.bounding_box_y =unique(bounding_rects(:,4)-bounding_rects(:,2));
 calib_settings.draw_gaze_pt = draw_gaze_pt;
 calib_settings.n_gaze_pts_draw = n_gaze_pts_draw;
-calib_settings.gaze_pt_dot_col = dot_col;
+calib_settings.gaze_pt_dot_col = gaze_pt_dot_col;
 calib_settings.gaze_pt_dot_sz = gaze_pt_sz;
 calib_settings.stimulus_pre_dot = stimulus_pre_dot;
 calib_settings.stimulus_pre_time = stimulus_pre_time;
