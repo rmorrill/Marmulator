@@ -78,6 +78,7 @@ reward_on = s.reward_on;
 %time_to_reward = s.time_to_reward;
 %time_out_after = s.time_out_after;
 location_require_quality = s.location_require_quality;
+%location_require_quality = false; % RJM
 stim_mode = s.stim_mode;
 img_folder = s.img_folder;
 pulse_size = s.pulse_size;
@@ -135,6 +136,16 @@ end
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1); 
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
+
+%% rsvp setup
+% rsvp will use presentation time for each stimulus duration
+n_rsvp = 3; 
+rsvp_iti_t = 300; 
+if n_rsvp>1
+    rsvp_mode = true; 
+else
+    rsvp_mode = false; 
+end
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -318,7 +329,9 @@ Screen('TextSize', win_ctrl, ctrl_win_text_size);
 screen_hz = Screen('NominalFrameRate', screenid_stim);
 ifi=Screen('GetFlipInterval', win);
 halfifi = 0.5*ifi;
-
+if rsvp_mode
+inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi); 
+end
 
 if color_shift_feedback
     n_frames_til_rew = round(time_to_reward/1e3/ifi);
@@ -597,6 +610,8 @@ for i = 1:n_trs_tot
     curr_tr = i;
     seqidx = tr_seq(i);
     stfridx = 0;
+    rsvpfridx = 0; 
+    rsvp_ctr = 0; 
     loop_brk_ctr = 0;
     pre_stim_timer = 0;
     manual_reward_flag = false;
@@ -644,6 +659,7 @@ for i = 1:n_trs_tot
     j = 0;
     fix_pre_fr_ctr = 0;
     blink_ctr = 0;
+    % ENTER STIMULUS PRE
     if stimulus_pre_dot
         stps = GetSecs();
         stim_pre_start(i) = stps - t_start_sec;
@@ -728,13 +744,30 @@ for i = 1:n_trs_tot
     
     end_stim = 0;
     blink_ctr = 0;
+    rsvp_ctr = 1; 
+    rsvp_break_ctr = 0; 
+    inter_rsvp_fr_ctr = 1; 
+    inter_rsvp = false; 
     
-    while ~end_stim && ~exit_flag
-        stfridx = stfridx + 1; % stim frame idx
+    % ENTER STIMULUS 
+    while ~end_stim && ~exit_flag % loops for every frame 
+        
+        if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
+            % go into a break
+            %sca
+            %keyboard
+            inter_rsvp = true;
+        else
+            inter_rsvp = false;
+            rsvpfridx = rsvpfridx + 1;
+        end
+        %rsvpfridx
+        
+        stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
         
         if ~trial_init_timed_out(i)
-            
+            % draw gray background:
             Screen('FillRect', win, bg_col_val);
             Screen('FillRect', win_ctrl, bg_col_val);
             
@@ -754,20 +787,12 @@ for i = 1:n_trs_tot
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
             eye_in_bb_curr(stfridx) = curr_in_bb;
             
-            %fprintf('x: %d y:%d, in bb: %d\n', eyeposx_cur, eyeposy_cur, curr_in_bb);
-            %         if curr_in_bb
-            %             sca;
-            %             keyboard;
-            %         end
-            
             if draw_retain_bb_pts
                 drawGoodEyePts(1);
             end
             
-            if seqidx ~= 0
+            if seqidx ~= 0  && ~inter_rsvp
                 switch stim_mode
-                    %case 'marmogrid'
-                    %   for p = 1:size(all_pts,1)
                     case 'spinning'
                         seqidx = tr_seq(stfridx,i);
                         xcurr = all_pts(seqidx,1);
@@ -873,8 +898,6 @@ for i = 1:n_trs_tot
                         if movtex_new>0
                             movtex = movtex_new;
                         end
-                        %Screen('DrawTexture', win_ctrl, movtex, [],  bounding_rects(seqidx,:))
-                        %Screen('DrawTexture', win, movtex, [],  bounding_rects(seqidx,:))
                         Screen('DrawTexture', win_ctrl, movtex, [],  stim_rect)
                         Screen('DrawTexture', win, movtex, [],  stim_rect)
                         % for movies, re-draw dots
@@ -895,7 +918,7 @@ for i = 1:n_trs_tot
                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         end
                 end
-            else % draw wakeup trial
+            elseif seqidx == 0 % draw wakeup trial
                 
                 if isempty(wake_up_image_displayed{i})
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
@@ -910,10 +933,13 @@ for i = 1:n_trs_tot
                 Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                     dotsz, rgba_cols(:,end), [], 1);
                 
-                %                 if stimulus_pre_dot
-                %                     Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                %                     Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                %                 end
+            elseif inter_rsvp
+                %sca
+                %keyboard
+                Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
+                    dotsz, rgba_cols(:,end), [], 1);
+                inter_rsvp_fr_ctr = inter_rsvp_fr_ctr + 1; 
+                %inter_rsvp_fr_ctr 
             end
             
             
@@ -925,19 +951,29 @@ for i = 1:n_trs_tot
                     qual_check = true;
                 end
                 
-                if curr_in_bb && qual_check
-                    entered_bb = true;
-                    loop_brk_ctr = loop_brk_ctr + 1;
-                    blink_ctr = 0;
-                    if isnan(time_to_bb(i))
-                        %                     time_to_bb(i) = GetSecs() - t_start_sec;
+                if rsvp_mode
+                    if curr_in_bb && qual_check
+                        rsvp_break_ctr = 0; 
+                    elseif (~curr_in_bb || ~qual_check)
+                        rsvp_break_ctr = rsvp_break_ctr + 1; 
+                        %rsvp_break_ctr
                     end
-                elseif (~curr_in_bb || ~qual_check) && loop_brk_ctr>3 && blink_ctr<n_frames_blink
-                    blink_ctr = blink_ctr + 1;
                 else
-                    blink_ctr = 0;
-                    loop_brk_ctr = 0;
+                    if curr_in_bb && qual_check
+                        entered_bb = true;
+                        loop_brk_ctr = loop_brk_ctr + 1;
+                        blink_ctr = 0;
+                        if isnan(time_to_bb(i))
+                            time_to_bb(i) = GetSecs() - t_start_sec;
+                        end
+                    elseif (~curr_in_bb || ~qual_check) && loop_brk_ctr>3 && blink_ctr<n_frames_blink
+                        blink_ctr = blink_ctr + 1;
+                    else
+                        blink_ctr = 0;
+                        loop_brk_ctr = 0;
+                    end
                 end
+                
             elseif strcmp(reward_on, 'quality')
                 if eyetracker_qual(idx_all)<2
                     loop_brk_ctr = loop_brk_ctr + 1;
@@ -946,14 +982,13 @@ for i = 1:n_trs_tot
                 end
             end
             
-            
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
             %if strcmp(stim_mode, 'movie')
             %    Screen('Close', movtex);
             %end
-            if strcmp(stim_mode, 'images') || seqidx == 0 
+            if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
                 Screen('Close', tex1);
                 Screen('Close', tex2);
             end
@@ -963,24 +998,44 @@ for i = 1:n_trs_tot
             calib_st_t(i) = GetSecs()-t_start_sec;
         end
         
+        if rsvp_mode && rsvpfridx >= stim_frames
+            rsvp_ctr = rsvp_ctr + 1;
+            inter_rsvp_fr_ctr = 1;
+            rsvpfridx = 1;
+            % change the image
+            img_idx = img_idx + 1;
+            if img_idx > nr_imgs
+                img_idx = 1;
+            end
+        end
+        
         % check if we need to end
-        if strcmp(trial_mode, 'trial') || seqidx == 0 
-            if stfridx >= stim_frames && seqidx ~= 0 
+        if strcmp(trial_mode, 'trial') || seqidx == 0
+            if  seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
-                end_stim = 1; 
+                end_stim = 1;
             end
         elseif strcmp(trial_mode, 'foraging')
-            if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
-                end_stim = 1;
-            elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && ~entered_bb
-                end_stim = 1;
-                fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
-            elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && entered_bb
-                end_stim = 1;
-                fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+            if rsvp_mode
+                if rsvp_ctr > n_rsvp
+                    end_stim = 1;
+                elseif rsvp_break_ctr >= round(time_out_after/1e3/ifi)
+                    end_stim = 1; 
+                    fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                end
+            else
+                if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
+                    end_stim = 1;
+                elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && ~entered_bb
+                    end_stim = 1;
+                    fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && entered_bb
+                    end_stim = 1;
+                    fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                end
             end
-        elseif trial_init_timed_out
+        elseif trial_init_timed_out(i)
             end_stim = 1;
         end
         
@@ -1011,6 +1066,8 @@ for i = 1:n_trs_tot
         %vbl2 = Screen('Flip', win_ctrl, vbl + halfifi);
         
         if end_stim
+           % sca
+           % keyboard
             Screen('FillRect', win, bg_col_val);
             Screen('FillRect', win_ctrl, bg_col_val);
             
@@ -1042,10 +1099,19 @@ for i = 1:n_trs_tot
                     end
                     
                 elseif strcmp(trial_mode, 'foraging')
-                    if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
-                        reward_this_trial = true;
+                    if rsvp_mode
+                        if rsvp_break_ctr >= round(time_out_after/1e3/ifi)
+                            reward_this_trial = false;
+                        else
+                            reward_this_trial = true;
+                        end
+                        
                     else
-                        reward_this_trial = false;
+                        if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
+                            reward_this_trial = true;
+                        else
+                            reward_this_trial = false;
+                        end
                     end
                 end
                 
@@ -1113,7 +1179,7 @@ for i = 1:n_trs_tot
         end
     end
     
-    if strcmp(stim_mode, 'images')
+    if strcmp(stim_mode, 'images') && ~rsvp_mode
         img_idx = img_idx + 1;
         if img_idx > nr_imgs
             img_idx = 1;
