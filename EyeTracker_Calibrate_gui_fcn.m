@@ -2,7 +2,7 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     subject, expt_params, calib_fname, gaze_offset, repeats_per_stim, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
-    reward_today_hand, reward_vol, setup_config)
+    reward_today_hand, reward_vol, punish_length_ms, setup_config)
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -100,7 +100,7 @@ rew_col_end = s.rew_col_end;
 play_reward_sound = s.play_reward_sound;
 reward_sound_file = s.reward_sound_file;
 give_punishments = s.give_punishments;
-punish_length_ms = s.punish_length_ms;
+%punish_length_ms = s.punish_length_ms;
 play_punish_sound = s.play_punish_sound;
 punish_sound_file = s.punish_sound_file;
 if eye_method_mouse
@@ -588,6 +588,8 @@ manual_reward_t = nan(1,n_trs_tot);
 stim_pre_start = nan(1,n_trs_tot);
 stim_pre_end = nan(1,n_trs_tot);
 trial_init_timed_out = false(1,n_trs_tot);
+calib_st_t = nan(1,n_trs_tot); 
+calib_end_t = nan(1,n_trs_tot); 
 
 
 if strcmp(stim_mode,'spinning')
@@ -1248,6 +1250,8 @@ else
     calib.n_completed = i;
 end
 calib.pts = all_pts;
+calib_st_t(isnan(calib_st_t)) = []; 
+calib_end_t(isnan(calib_end_t)) = []; 
 calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
 calib.time_to_bounding_box = time_to_bb;

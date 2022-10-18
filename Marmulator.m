@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 13-Oct-2022 13:42:54
+% Last Modified by GUIDE v2.5 18-Oct-2022 17:56:31
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -295,7 +295,7 @@ EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
-    handles.reward_vol/1e3, handles.setup_config);
+    handles.reward_vol/1e3, handles.punish_time , handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -374,6 +374,7 @@ if curridx == 1
     set(handles.fixation_edit, 'String', ''); 
     set(handles.time_out_edit, 'String', ''); 
     set(handles.require_fix_check, 'Value', 0); 
+    set(handles.punish_time_edit, 'String', ''); 
 else
     handles.params_file = fullfile(handles.expt_params_dir, flist{curridx});
     handles.params = load(handles.params_file);
@@ -382,6 +383,8 @@ else
     handles.hold_time = handles.params.time_to_reward;
     handles.response_time = handles.params.time_out_after;
     handles.trial_time = handles.params.presentation_time;
+    handles.punish_time = handles.params.punish_length_ms; 
+    
     if isfield(handles.params, 'require_fix_tr_init')
         handles.require_fix_tr_init = handles.params.require_fix_tr_init;
     else
@@ -398,9 +401,7 @@ else
         handles.time_out_trial_init_s = [];
     end
     
-    
     %keyboard
-    
     set(handles.trial_time_edit, 'String', sprintf('%d', handles.trial_time));
     set(handles.n_x_y_string, 'String', sprintf('[%d, %d]', handles.nr_pts_x_y(1), handles.nr_pts_x_y(2)));
     set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
@@ -411,6 +412,7 @@ else
     set(handles.require_fix_check, 'Value', handles.require_fix_tr_init);
     set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init)); 
     set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s)); 
+    set(handles.punish_time_edit, 'String', num2str(handles.punish_time)); 
     
     if ~handles.require_fix_tr_init
         set(handles.fixation_edit, 'Enable', 'off');
@@ -1036,3 +1038,26 @@ if h.pump_serial_connected
 end
 
 delete(hObject); 
+
+
+
+function punish_time_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to punish_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of punish_time_edit as text
+%        str2double(get(hObject,'String')) returns contents of punish_time_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function punish_time_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to punish_time_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
