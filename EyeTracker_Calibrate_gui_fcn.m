@@ -64,7 +64,7 @@ n_pts_y = s.n_pts_y;
 %presentation_time = s.presentation_time;
 inter_stim_interval = s.inter_stim_interval;
 iti_random = s.iti_random;
-order = s.order;
+position_order = s.order;
 bg_col = s.bg_col;
 stim_rect_size_x = s.stim_rect_size_x;
 stim_rect_size_y = s.stim_rect_size_y;
@@ -146,6 +146,8 @@ if n_rsvp>1
 else
     rsvp_mode = false; 
 end
+
+image_order = 'random'; 
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -264,12 +266,24 @@ dotsz = gaze_pt_sz;
 
 % setup for images
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
-    img_d = dir(img_folder);
-    img_d = img_d(~[img_d.isdir]);
-    imgs = cell(1,numel(img_d));
-    for i = 1:numel(img_d)
-        image_fname_list{i} = fullfile(img_folder, img_d(i).name);
-        [img_tmp, ~,alpha] = imread(image_fname_list{i});
+    if iscell(img_folder)
+        img_fnames = []; 
+        for i = 1:numel(img_folder)
+            img_fnames_tmp = dir(img_folder{i});
+            img_fnames_tmp = img_fnames_tmp(~[img_fnames_tmp.isdir]);
+            img_fnames_tmp = fullfile(img_folder{i}, {img_fnames_tmp.name}); 
+            img_fnames = [img_fnames img_fnames_tmp]; 
+        end
+    else
+        img_fnames_tmp = dir(img_folder);
+        img_fnames_tmp = {img_fnames_tmp(~[img_fnames_tmp.isdir]).name};
+        img_fnames = fullfile(img_folder, img_fnames_tmp); 
+    end
+    
+    imgs = cell(1,numel(img_fnames));
+    for i = 1:numel(img_fnames)
+        %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
+        [img_tmp, ~,alpha] = imread(img_fnames{i});
         if ~isempty(alpha)
             img_tmp(:,:,4) = alpha;
         end
@@ -284,7 +298,6 @@ end
 
 
 %%
-
 Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'SkipSyncTests', skip_sync_tests)
 Screen('Preference', 'VisualDebugLevel', 0)
@@ -472,8 +485,9 @@ end
 n_trs_tot = n_calib_pts*repeats_per_stim;
 
 
-tr_seq = []; % trial sequence
-if strcmp(order, 'random')
+tr_seq = []; % trial sequence - note that this determines the position of stimuli only. 
+% img_seq determines the sequence of images
+if strcmp(position_order, 'random')
     for q = 1:repeats_per_stim
         tr_seq = [tr_seq randperm(n_calib_pts)];
     end
@@ -481,9 +495,18 @@ else
     tr_seq = repmat(1:n_calib_pts, 1, repeats_per_stim);
 end
 
+% set up img sequence 
+n_rsvps = n_trs_tot*n_rsvp; 
+x = floor(270/nr_imgs); 
+img_seq = [repmat(1:nr_imgs, 1, x) 1:mod(n_rsvps, x*nr_imgs)]; 
+if strcmp(image_order, 'random')
+    img_seq =  img_seq(randperm(numel(img_seq))); 
+end
+img_seq = reshape(img_seq, [n_rsvp, n_trs_tot]); 
+
 
 if wake_up_trials
-    y = nan(1,n_trs_tot);
+    y = nan(1,n_trs_tot); 
     z = [tr_seq; y];
     n_wake_up_trs = ceil(n_trs_tot/mean(wake_up_every))+1;
     wue = wake_up_every -1;
@@ -519,7 +542,7 @@ if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = repeats_per_stim;
 end
 
-image_displayed = cell(1, n_trs_tot); % will be empty for all except 'images' sessions
+image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
 wake_up_image_displayed = cell(1, n_trs_tot); 
 
 % calculate frames per stim, iti
@@ -573,7 +596,7 @@ if strcmp(stim_mode,'spinning')
     for q = 1:n_trs_tot
         tr_seq(1,q) = randi(n_calib_pts);
     end
-    if strcmp(order, 'random')
+    if strcmp(position_order, 'random')
         for q = 1: n_trs_tot
             if rand(1) > 0.5 %ccw
                 tr_seq(2:length(tr_seq),q)...
@@ -747,10 +770,11 @@ for i = 1:n_trs_tot
     rsvp_ctr = 1; 
     rsvp_break_ctr = 0; 
     inter_rsvp_fr_ctr = 1; 
-    inter_rsvp = false; 
     
     % ENTER STIMULUS 
     while ~end_stim && ~exit_flag % loops for every frame 
+        
+        img_idx = img_seq(rsvp_ctr, i); 
         
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
             % go into a break
@@ -820,7 +844,7 @@ for i = 1:n_trs_tot
                         tex1 = Screen('MakeTexture', win, imgs{img_idx});
                         
                         if isempty(image_displayed{i})
-                            image_displayed{i} = image_fname_list{img_idx};
+                            image_displayed{rsvp_ctr, i} = img_fnames{img_idx};
                         end
                         
                         if pulse_size
@@ -1003,10 +1027,10 @@ for i = 1:n_trs_tot
             inter_rsvp_fr_ctr = 1;
             rsvpfridx = 1;
             % change the image
-            img_idx = img_idx + 1;
-            if img_idx > nr_imgs
-                img_idx = 1;
-            end
+%             img_idx = img_idx + 1;
+%             if img_idx > nr_imgs
+%                 img_idx = 1;
+%             end
         end
         
         % check if we need to end
@@ -1179,12 +1203,12 @@ for i = 1:n_trs_tot
         end
     end
     
-    if strcmp(stim_mode, 'images') && ~rsvp_mode
-        img_idx = img_idx + 1;
-        if img_idx > nr_imgs
-            img_idx = 1;
-        end
-    end
+%     if strcmp(stim_mode, 'images') && ~rsvp_mode
+%         img_idx = img_idx + 1;
+%         if img_idx > nr_imgs
+%             img_idx = 1;
+%         end
+%     end
     
     if seqidx == 0
         wu_img_idx = wu_img_idx +1;
@@ -1246,7 +1270,7 @@ calib_settings.presentation_time = presentation_time;
 calib_settings.inter_stim_interval = inter_stim_interval;
 calib_settings.iti_random = iti_random;
 calib_settings.iti_frames = iti_frames;
-calib_settings.order = order;
+calib_settings.position_order = position_order;
 calib_settings.bg_col = bg_col;
 calib_settings.stim_rect_size_x = stim_rect_size_x;
 calib_settings.stim_rect_size_y = stim_rect_size_y;
@@ -1254,10 +1278,13 @@ calib_settings.stim_mode = stim_mode;
 calib_settings.img_folder = img_folder;
 calib_settings.pulsed_img_size = pulse_size;
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') ||strcmp(stim_mode,'smooth pursuit')
-    calib_settings.img_list = {img_d.name};
+    calib_settings.img_list = img_fnames;
 else
     calib_settings.img_list = [];
 end
+calib_settings.img_seq = img_seq; 
+calib_settings.n_rsvp = n_rsvp; 
+calib_settings.rsvp_iti_ms = rsvp_iti_t; 
 
 if strcmp(stim_mode,'spinning')  ||strcmp(stim_mode,'smooth pursuit')
     calib_settings.diam_circle = diam_circle;
