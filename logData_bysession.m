@@ -25,8 +25,7 @@ if ~exist(session_file_dir)
 else
     load(session_file_dir); 
     curridx = height(T) + 1; 
-    if class(T.('cumulative n_trials')) 
-    cumulative_n_trials = sum(T.('cumulative n_trials')); 
+    cumulative_n_trials = sum(T.('correct n_trials')); 
     T = table2cell(T);
 end
 
@@ -44,11 +43,13 @@ end
 
 T{curridx,6} = calib_settings.stim_mode; 
 if strcmp(T{curridx,6}, 'images')
+    l = strsplit(calib_settings.img_folder,'\'); 
+    l_bool = ~cellfun(@isempty,l);
+    l = l(l_bool); 
     if calib_settings.pulsed_img_size == 1
-        l = strsplit(calib_settings.img_folder,'\'); 
-        T{curridx,6} = strcat('pulsating', {' '}, l{length(l)-1});
+        T{curridx,6} = strcat('pulsating', {' '}, l{length(l)});
     else
-        T{curridx,6} = l{length(l)-1}; 
+        T{curridx,6} = l{length(l)}; 
     end
 end
 
