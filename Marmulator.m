@@ -1070,7 +1070,7 @@ if ~isempty(h.subject_file)
     updateSubjectLogTable(h.subject_file, reward_today, h.curr_date);
 end
 
-if h.arduino_connected
+if h.pump_arduino_connected
     fid = instrfind('Port', h.arduino_comport);
     fclose(fid);
     delete(h.reward_arduino);
