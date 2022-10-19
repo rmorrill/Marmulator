@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 18-Oct-2022 19:06:47
+% Last Modified by GUIDE v2.5 18-Oct-2022 19:45:24
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -68,6 +68,7 @@ if ~exist(setup_params_file, 'file')
 else
     sc = load(setup_params_file); 
     set(handles.com_serial_edit, 'String', sc.serial_pump_comport); 
+    set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport)
     set(handles.com_edit, 'String', sc.arduino_pump_comport); 
     set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
     handles.base_dir = sc.marmulator_base_dir;
@@ -75,7 +76,17 @@ else
     handles.setup_config = sc; 
 end
 
-handles.arduino_connected = 0; 
+logo_file = fullfile(handles.base_dir, 'gui', 'marmulator_logo.png'); 
+if isfile(logo_file)
+    logo_img = imread(logo_file); 
+    axes(handles.logo_axes); 
+    imshow(logo_img); 
+else
+    delete(handles.logo_axes)
+end
+
+handles.trig_arduino_connected = 0; 
+handles.pump_arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
 %handles.reward_pin = 10; 
@@ -147,25 +158,25 @@ function connect_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.arduino_comport = get(handles.com_edit, 'String');
-if ~handles.arduino_connected
+if ~handles.pump_arduino_connected
     try
         handles.reward_arduino = arduino(handles.arduino_comport);
         flush(handles.reward_arduino);
         %set(gcbo, 'Enable', 'off')
         handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
-        handles.arduino_connected = 1;
+        handles.pump_arduino_connected = 1;
         set(gcbo, 'String', 'Disconnect')
     catch me
         disp(me);
         disp('Arduino not connected!');
-        handles.arduino_connected = 0;
+        handles.pump_arduino_connected = 0;
     end
 else
     fid = instrfind('Port', handles.arduino_comport); 
     fclose(fid); 
     delete(handles.reward_arduino);
     handles.reward_arduino = []; 
-    handles.arduino_connected = 0;
+    handles.pump_arduino_connected = 0;
     set(gcbo, 'String', 'Connect Arduino')
     disp('Arduino disconnected'); 
 end
@@ -200,7 +211,7 @@ function reward_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 %keyboard
-if handles.arduino_connected
+if handles.pump_arduino_connected
     handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
     %WaitSecs(0.1);
     WaitSecs(0.);
@@ -244,7 +255,7 @@ if ~isfield(handles, 'params_file') || isempty(handles.params_file)
 end
 
 
-if handles.arduino_connected 
+if handles.pump_arduino_connected 
     ra = handles.reward_arduino; 
 elseif handles.pump_serial_connected
     ra = handles.reward_serial; 
@@ -892,7 +903,7 @@ if ~handles.pump_serial_connected
     catch me
         disp(me);
         disp('Serial not connected!');
-        handles.arduino_connected = 0;
+        handles.pump_serial_connected = 0;
     end
 else
     %fid = instrfind('Port', handles.pump_serial_comport);
@@ -1141,3 +1152,60 @@ function break_after_edit_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+
+function trig_arduino_com_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to trig_arduino_com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of trig_arduino_com_edit as text
+%        str2double(get(hObject,'String')) returns contents of trig_arduino_com_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function trig_arduino_com_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to trig_arduino_com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in connect_trig_arduino_push.
+function connect_trig_arduino_push_Callback(hObject, eventdata, handles)
+% hObject    handle to connect_trig_arduino_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+port = get(handles.trig_arduino_com_edit, 'String');
+if ~handles.trig_arduino_connected
+    baudrate = 115200;
+    [ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
+    if isempty(errmsg) % good, success
+        fprintf('Trigger arduino on port %s is connected\n', port);
+        handles.trig_arduino = ahand;
+        IOPort('Flush', handles.trig_arduino); 
+        set(gcbo, 'String', 'Disconnect');
+        set(handles.trig_arduino_com_edit, 'enable', 'off');
+        handles.trig_arduino_connected = 1;
+    else
+        fprintf('ERROR CONNECTING TO %s\n', port);
+        fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
+        handles.trig_arduino_connected = 0;
+    end
+else
+    IOPort('Flush', handles.trig_arduino); 
+    IOPort('Close', handles.trig_arduino);    
+    set(handles.trig_arduino_com_edit, 'enable', 'on');
+    set(gcbo, 'String', 'Connect');
+    handles.trig_arduino_connected = 0;
+    fprintf('Disconnecting from port %s\n', port);
+end
+
+guidata(hObject, handles);
