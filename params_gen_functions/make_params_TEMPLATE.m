@@ -11,14 +11,6 @@ save_base = 'MARMULATOR_BASE_PATH'; % e.g. 'C:\MATLAB\Marmulator';
 window_rect = []; % empty to run fullscreen
 skip_sync_tests = 1;
 
-% for putting into degrees:
-screen_dist_cm = 17.8; % cm
-screen_width_cm = 27.9;
-screen_ht_cm = 15.6;
-
-screenid_stim = 1; % screen id for displaying stimuli 
-screenid_ctrl = 2; % screen id for control, i.e. screen that gives session info 
-
 calibration_win_len = 200;
 calibration_win_ht = 200; 
 

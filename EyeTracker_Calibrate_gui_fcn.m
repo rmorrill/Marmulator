@@ -51,9 +51,9 @@ save_params_here = s.save_params_here;
 eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
 window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
-screen_dist_cm = s.screen_dist_cm;
-screen_width_cm = s.screen_width_cm;
-screen_ht_cm = s.screen_ht_cm;
+%screen_dist_cm = s.screen_dist_cm;
+%screen_width_cm = s.screen_width_cm;
+%screen_ht_cm = s.screen_ht_cm;
 screenid_stim = setup_config.screenid_stim;
 screenid_ctrl = setup_config.screenid_ctrl;
 calibration_win_len = s.calibration_win_len;
@@ -302,7 +302,6 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
         ar(i) = im_wd(i)/im_ht(i);
     end
     nr_imgs = numel(imgs);
-    img_idx = 1;
 end
 
 
@@ -352,7 +351,7 @@ screen_hz = Screen('NominalFrameRate', screenid_stim);
 ifi=Screen('GetFlipInterval', win);
 halfifi = 0.5*ifi;
 if rsvp_mode
-inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi); 
+    inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi); 
 end
 
 if color_shift_feedback
@@ -557,11 +556,14 @@ wake_up_image_displayed = cell(1, n_trs_tot);
 % calculate frames per stim, iti
 stim_frames = round(presentation_time/1e3/ifi);
 pulse_rate = (rand(1, n_trs_tot)+0.5)*3;
+
 if strcmp(trial_mode, 'trial')
     t_sin = 0:ifi:(presentation_time/1e3);
 elseif strcmp(trial_mode, 'foraging')
     t_sin = 0:ifi:(time_out_after+time_to_reward/1e3);
 end
+%sca
+%keyboard 
 
 % set up audio feedback
 if play_reward_sound
@@ -587,7 +589,6 @@ seqidx = 0;
 vbl = Screen('Flip', win);
 t_start_sec = GetSecs();
 
-
 reward_trial = false(1,n_trs_tot); % for recording whether trial was rewarded
 punish_trial = false(1,n_trs_tot);
 reward_time = nan(1,n_trs_tot); % for recording the time of a reward
@@ -599,7 +600,6 @@ stim_pre_end = nan(1,n_trs_tot);
 trial_init_timed_out = false(1,n_trs_tot);
 calib_st_t = nan(1,n_trs_tot); 
 calib_end_t = nan(1,n_trs_tot); 
-
 
 if strcmp(stim_mode,'spinning')
     tr_seq = nan(n_calib_pts,n_trs_tot);
@@ -637,6 +637,7 @@ man_reward_ct = 0;
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
+test_stim_tr_idx = 0; 
 
 % start the stimulus loop
 for i = 1:n_trs_tot
@@ -645,7 +646,6 @@ for i = 1:n_trs_tot
     seqidx = tr_seq(i);
     stfridx = 0;
     rsvpfridx = 0; 
-    rsvp_ctr = 0; 
     loop_brk_ctr = 0;
     pre_stim_timer = 0;
     manual_reward_flag = false;
@@ -662,6 +662,7 @@ for i = 1:n_trs_tot
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
+        test_stim_tr_idx = test_stim_tr_idx + 1;
     else
         % put stim rect around center
         xcurr = x_cent;
@@ -785,12 +786,10 @@ for i = 1:n_trs_tot
     rsvp_ctr = 1; 
     rsvp_break_ctr = 0; 
     inter_rsvp_fr_ctr = 1; 
+    pulse_t_idx = 0; % for size-pulsed imaged 
     
     % ENTER STIMULUS 
     while ~end_stim && ~exit_flag % loops for every frame 
-        
-        img_idx = img_seq(rsvp_ctr, i); 
-        
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
             % go into a break
             %sca
@@ -801,7 +800,7 @@ for i = 1:n_trs_tot
             rsvpfridx = rsvpfridx + 1;
         end
         %rsvpfridx
-        
+        img_idx = img_seq(rsvp_ctr, test_stim_tr_idx);
         stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
         
@@ -865,7 +864,12 @@ for i = 1:n_trs_tot
                         if pulse_size
                             pulse_sin = (cos(2*pi*pulse_rate(i)*t_sin) +1)/2;
                             pulse_sin = (pulse_sin + 1)/2; % 50% modulation depth
-                            rsx_curr = stim_rect_size_x*pulse_sin(stfridx);
+                            pulse_t_idx = pulse_t_idx + 1; 
+                            if pulse_t_idx>length(t_sin)
+                                pulse_t_idx =1; 
+                            end                           
+                            %rsx_curr = stim_rect_size_x*pulse_sin(stfridx);
+                            rsx_curr = stim_rect_size_x*pulse_sin(pulse_t_idx);
                             rsy_curr = round(rsx_curr/ar(img_idx));
                         else
                             rsx_curr = stim_rect_size_x;
@@ -1047,7 +1051,9 @@ for i = 1:n_trs_tot
         if trial_init_timed_out(i)
              end_stim = 1;
         elseif strcmp(trial_mode, 'trial') || seqidx == 0
-            if  seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
+            if ~rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames % finished successfully
+                end_stim = 1; 
+            elseif rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
                 end_stim = 1;
