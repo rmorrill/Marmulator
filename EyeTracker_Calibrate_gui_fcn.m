@@ -2,7 +2,8 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
-    reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, setup_config)
+    reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ... 
+    trigger_arduino, setup_config)
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -39,7 +40,24 @@ elseif ~isempty(reward_pumphand) && contains(class(reward_pumphand), 'arduino')
     reward_serial = false;
 end
 
+if ~isempty(trigger_arduino)
+    trig_hand = trigger_arduino.ahand;
+    trig_flag = true;
+    [sess_trig_cmd, trial_trig_cmd, stim_trig_cmd] = gen_trig_commands(trigger_arduino);
+    % ensure that everything is off
+    % turn off session trigger
+    IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
+    WaitSecs(0.05);
+    IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+    WaitSecs(0.05);
+    IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+    WaitSecs(0.05);
+else
+    trig_flag = false;
+end
 
+%sca
+%keyboard 
 PsychJavaSwingCleanup;
 
 %% SETTINGS:
@@ -338,6 +356,11 @@ Screen('BlendFunction', win, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 [x_cent, y_cent] = RectCenter(win_rect);
 
+
+% turn on session trigger 
+IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
+WaitSecs(0.05); 
+IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
 
 if apply_gaze_center_adj
     y_cent = y_cent + gaze_center_adj_y;
@@ -694,6 +717,8 @@ for i = 1:n_trs_tot
     j = 0;
     fix_pre_fr_ctr = 0;
     blink_ctr = 0;
+    trial_trig_hi = 0; 
+    
     % ENTER STIMULUS PRE
     if stimulus_pre_dot
         stps = GetSecs();
@@ -715,6 +740,11 @@ for i = 1:n_trs_tot
             
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
+            
+            if ~trial_trig_hi 
+                IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
+                trial_trig_hi = 1; 
+            end
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
@@ -787,13 +817,12 @@ for i = 1:n_trs_tot
     rsvp_break_ctr = 0; 
     inter_rsvp_fr_ctr = 1; 
     pulse_t_idx = 0; % for size-pulsed imaged 
+    stim_trig_hi = 0; 
     
     % ENTER STIMULUS 
     while ~end_stim && ~exit_flag % loops for every frame 
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
             % go into a break
-            %sca
-            %keyboard
             inter_rsvp = true;
         else
             inter_rsvp = false;
@@ -1027,6 +1056,15 @@ for i = 1:n_trs_tot
             
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
+            if ~stim_trig_hi && ~inter_rsvp
+                disp('stim trig on'); 
+                IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
+                stim_trig_hi = 1; 
+            elseif stim_trig_hi && inter_rsvp
+                  disp('stim trig off'); 
+                IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+                stim_trig_hi = 0; 
+            end
             
             %if strcmp(stim_mode, 'movie')
             %    Screen('Close', movtex);
@@ -1098,6 +1136,9 @@ for i = 1:n_trs_tot
         % if ending, note the time:
         if end_stim
             calib_end_t(i) = GetSecs()-t_start_sec;
+            disp('stim trig off');
+            IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+            stim_trig_hi = 0;
         end
         
         if end_stim
@@ -1117,6 +1158,9 @@ for i = 1:n_trs_tot
             end
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
+            
+            % turn off trial trigger
+            IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
             
             
             if give_rewards
@@ -1244,6 +1288,15 @@ end
 t2 = GetSecs;
 Screen('CloseAll');
 sca
+
+% turn off session trigger 
+IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
+WaitSecs(0.05); 
+IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
+% ensure everything else is off
+IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+
 
 %% gather data for save
 calib.n_pts_x = n_pts_x;

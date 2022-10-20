@@ -284,6 +284,10 @@ else
     handles.subject = subj_tmp; 
 end
 
+if ~handles.trig_arduino_connected
+    handles.trigger_arduino = []; 
+end
+
 gaze_offset_x = str2num(get(handles.offset_x_edit, 'String')); 
 gaze_offset_y = str2num(get(handles.offset_y_edit, 'String')); 
 gaze_offset =[gaze_offset_x, gaze_offset_y]; 
@@ -309,7 +313,8 @@ EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
-    handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, handles.setup_config);
+    handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
+    handles.trigger_arduino, handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -1189,19 +1194,25 @@ if ~handles.trig_arduino_connected
     [ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
     if isempty(errmsg) % good, success
         fprintf('Trigger arduino on port %s is connected\n', port);
-        handles.trig_arduino = ahand;
-        IOPort('Flush', handles.trig_arduino); 
+        trigger_arduino.ahand = ahand; 
+        IOPort('Flush', ahand); 
         set(gcbo, 'String', 'Disconnect');
         set(handles.trig_arduino_com_edit, 'enable', 'off');
         handles.trig_arduino_connected = 1;
+        % MAKE THESE PART OF SETUP SOON 
+        trigger_arduino.session_pin = 4; 
+        trigger_arduino.trial_pin = 7; 
+        trigger_arduino.stim_pin = 10; 
+        assign_trigger_pins(trigger_arduino); 
+        handles.trigger_arduino = trigger_arduino;
     else
         fprintf('ERROR CONNECTING TO %s\n', port);
         fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
         handles.trig_arduino_connected = 0;
     end
 else
-    IOPort('Flush', handles.trig_arduino); 
-    IOPort('Close', handles.trig_arduino);    
+    IOPort('Flush', handles.trigger_arduino.ahand); 
+    IOPort('Close', handles.trigger_arduino.ahand);    
     set(handles.trig_arduino_com_edit, 'enable', 'on');
     set(gcbo, 'String', 'Connect');
     handles.trig_arduino_connected = 0;
