@@ -506,7 +506,7 @@ end
 
 % set up img sequence 
 n_rsvps = n_trs_tot*n_rsvp; 
-x = floor(270/nr_imgs); 
+x = floor(n_rsvps/nr_imgs); 
 img_seq = [repmat(1:nr_imgs, 1, x) 1:mod(n_rsvps, x*nr_imgs)]; 
 if strcmp(image_order, 'random')
     img_seq =  img_seq(randperm(numel(img_seq))); 

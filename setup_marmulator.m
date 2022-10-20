@@ -22,8 +22,16 @@ setup_save_path = fullfile(marmulator_base_dir, 'setup_config.mat');
 
 save(setup_save_path, 'marmulator_base_dir', 'save_dir_local',...
     'save_dir_remote', 'eyetracker_toolbox_dir', 'serial_pump_comport',...
-    'arduino_pump_comport', 'arduino_lickometer_comport', 'arduino_triggers_comport',...
+    'arduino_pump_comport', 'arduino_lickometer_comport', 'arduino_trigger
+s_comport',...
     'default_gaze_center_adjust', 'screenid_stim', 'screenid_ctrl', ...
     'setup_date');  
 
 fprintf('saved setup config to %s\n', setup_save_path); 
+
+
+
+
+
+
+
