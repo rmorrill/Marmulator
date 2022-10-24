@@ -175,7 +175,9 @@ gaze_center_adj_x = setup_config.default_gaze_center_adjust(1);
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
 
-
+%% photodiode flash 
+photodiode_flash = true; 
+flash_rect_size = [90 90]; 
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -358,6 +360,12 @@ Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 [x_cent, y_cent] = RectCenter(win_rect);
 
 
+if photodiode_flash
+    flash_rect = [win_rect(3)-flash_rect_size(1), win_rect(4)-flash_rect_size(2),...
+        win_rect(3), win_rect(4)]; 
+end
+
+
 % turn on session trigger 
 if trig_flag
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
@@ -510,7 +518,6 @@ if ~isempty(manual_bounding_boxes)
     if apply_gaze_center_adj
         manual_bounding_boxes = OffsetRect(manual_bounding_boxes, gaze_center_adj_x, gaze_center_adj_y);
     end
-    
     bounding_rects = manual_bounding_boxes;
 else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
@@ -1057,14 +1064,31 @@ for i = 1:n_trs_tot
                 end
             end
             
+            if photodiode_flash && ~inter_rsvp
+                if rsvp_mode
+                   whichflash = mod(rsvpfridx, 2); 
+                else
+                   whichflash = mod(stfridx, 2); 
+                end
+                
+                if whichflash 
+                     Screen('FillRect', win, blackcol, flash_rect);
+                     Screen('FillRect', win_ctrl, blackcol, flash_rect);
+                else
+                     Screen('FillRect', win, whitecol, flash_rect);
+                     Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                end
+            end
+            
+            
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             if trig_flag && ~stim_trig_hi && ~inter_rsvp
-                disp('stim trig on'); 
+                %disp('stim trig on'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
                 stim_trig_hi = 1; 
             elseif trig_flag && stim_trig_hi && inter_rsvp
-                  disp('stim trig off'); 
+                %  disp('stim trig off'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0; 
             end
