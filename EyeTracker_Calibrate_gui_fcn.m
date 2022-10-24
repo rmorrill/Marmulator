@@ -1466,13 +1466,16 @@ catch me
 end
 
 
+%% add to subject log table automatically
+log_dir = 'C:/MATLAB/Marmulator/subject_logs_bysessions';
+logData_bysession(log_dir,fullfile(save_data_dir, savefname)); 
+
 %% execute plots automatically
 
 if contains(calib_settings.expt_params,'center_point')
     get_mean_x_y_pts(fullfile(save_data_dir, savefname))
 end
 
-%% add to subject log table automatically
 
 
 %%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
