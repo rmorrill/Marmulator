@@ -5,6 +5,8 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ... 
     trigger_arduino, setup_config)
 
+%keyboard
+
 if ~isempty(calib_fname)
     c = load(calib_fname);
     
@@ -159,7 +161,7 @@ else
     rsvp_iti_t = 0;
 end
 
-if isempty(n_rsvp)
+if isempty(n_rsvp) || isnan(n_rsvp)
     n_rsvp = 1; 
 end
 
@@ -173,8 +175,6 @@ image_order = 'random';
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1); 
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
-
-
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -358,9 +358,11 @@ Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 
 
 % turn on session trigger 
-IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
-WaitSecs(0.05); 
-IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
+if trig_flag
+    IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
+    WaitSecs(0.05); 
+    IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
+end
 
 if apply_gaze_center_adj
     y_cent = y_cent + gaze_center_adj_y;
@@ -526,14 +528,6 @@ else
     tr_seq = repmat(1:n_calib_pts, 1, trs_per_location);
 end
 
-% set up img sequence 
-n_rsvps = n_trs_tot*n_rsvp; 
-x = floor(n_rsvps/nr_imgs); 
-img_seq = [repmat(1:nr_imgs, 1, x) 1:mod(n_rsvps, x*nr_imgs)]; 
-if strcmp(image_order, 'random')
-    img_seq =  img_seq(randperm(numel(img_seq))); 
-end
-img_seq = reshape(img_seq, [n_rsvp, n_trs_tot]); 
 
 
 if wake_up_trials
@@ -569,11 +563,27 @@ else
 end
 
 
+% set up img sequence
+if strcmp(stim_mode, 'images')
+    n_rsvps = n_trs_tot*n_rsvp;
+    x = floor(n_rsvps/nr_imgs);
+    img_seq = [repmat(1:nr_imgs, 1, x) 1:mod(n_rsvps, x*nr_imgs)];
+    if strcmp(image_order, 'random')
+        img_seq =  img_seq(randperm(numel(img_seq)));
+    end
+    img_seq = reshape(img_seq, [n_rsvp, n_trs_tot]);
+    image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
+else
+    img_seq = []; 
+    image_displayed = []; 
+end
+
+
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
 end
 
-image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
+
 wake_up_image_displayed = cell(1, n_trs_tot); 
 
 % calculate frames per stim, iti
@@ -741,7 +751,7 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
-            if ~trial_trig_hi 
+            if ~trial_trig_hi && trig_flag
                 IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
                 trial_trig_hi = 1; 
             end
@@ -829,7 +839,9 @@ for i = 1:n_trs_tot
             rsvpfridx = rsvpfridx + 1;
         end
         %rsvpfridx
+        if strcmp(stim_mode, 'images')
         img_idx = img_seq(rsvp_ctr, test_stim_tr_idx);
+        end
         stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
         
@@ -891,6 +903,8 @@ for i = 1:n_trs_tot
                         end
                         
                         if pulse_size
+                            %sca
+                            %keyboard
                             pulse_sin = (cos(2*pi*pulse_rate(i)*t_sin) +1)/2;
                             pulse_sin = (pulse_sin + 1)/2; % 50% modulation depth
                             pulse_t_idx = pulse_t_idx + 1; 
@@ -1056,11 +1070,11 @@ for i = 1:n_trs_tot
             
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
-            if ~stim_trig_hi && ~inter_rsvp
+            if ~stim_trig_hi && ~inter_rsvp && trig_flag
                 disp('stim trig on'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
                 stim_trig_hi = 1; 
-            elseif stim_trig_hi && inter_rsvp
+            elseif stim_trig_hi && inter_rsvp && trig_flag
                   disp('stim trig off'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0; 
@@ -1136,9 +1150,11 @@ for i = 1:n_trs_tot
         % if ending, note the time:
         if end_stim
             calib_end_t(i) = GetSecs()-t_start_sec;
-            disp('stim trig off');
-            IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
-            stim_trig_hi = 0;
+            if trig_flag
+                disp('stim trig off');
+                IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+                stim_trig_hi = 0;
+            end
         end
         
         if end_stim
@@ -1160,8 +1176,9 @@ for i = 1:n_trs_tot
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
             % turn off trial trigger
-            IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
-            
+            if trig_flag
+                IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+            end
             
             if give_rewards
                 if strcmp(trial_mode, 'trial') || seqidx == 0 
@@ -1290,12 +1307,14 @@ Screen('CloseAll');
 sca
 
 % turn off session trigger 
-IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
-WaitSecs(0.05); 
-IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
-% ensure everything else is off
-IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
-IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+if trig_flag
+    IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
+    WaitSecs(0.05); 
+    IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
+    % ensure everything else is off
+    IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+    IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+end
 
 
 %% gather data for save
