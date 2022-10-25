@@ -1,3 +1,4 @@
+
 function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
     subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
@@ -175,6 +176,10 @@ image_order = 'random';
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1); 
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
+
+%% photodiode flash 
+photodiode_flash = true; 
+flash_rect_size = [90 90]; 
 
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
@@ -360,7 +365,7 @@ Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 % turn on session trigger 
 if trig_flag
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
-    WaitSecs(0.05); 
+    WaitSecs(0.05);
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
 end
 
@@ -509,7 +514,6 @@ if ~isempty(manual_bounding_boxes)
     if apply_gaze_center_adj
         manual_bounding_boxes = OffsetRect(manual_bounding_boxes, gaze_center_adj_x, gaze_center_adj_y);
     end
-    
     bounding_rects = manual_bounding_boxes;
 else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
@@ -751,7 +755,7 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
-            if ~trial_trig_hi && trig_flag
+            if trig_flag && ~trial_trig_hi 
                 IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
                 trial_trig_hi = 1; 
             end
@@ -1070,12 +1074,12 @@ for i = 1:n_trs_tot
             
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
-            if ~stim_trig_hi && ~inter_rsvp && trig_flag
-                disp('stim trig on'); 
+            if trig_flag && ~stim_trig_hi && ~inter_rsvp
+                %disp('stim trig on'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
                 stim_trig_hi = 1; 
-            elseif stim_trig_hi && inter_rsvp && trig_flag
-                  disp('stim trig off'); 
+            elseif trig_flag && stim_trig_hi && inter_rsvp
+                %  disp('stim trig off'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0; 
             end
@@ -1175,8 +1179,8 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
-            % turn off trial trigger
             if trig_flag
+                % turn off trial trigger
                 IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
             end
             
@@ -1306,16 +1310,15 @@ t2 = GetSecs;
 Screen('CloseAll');
 sca
 
-% turn off session trigger 
 if trig_flag
+    % turn off session trigger
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
-    WaitSecs(0.05); 
+    WaitSecs(0.05);
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
     % ensure everything else is off
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
 end
-
 
 %% gather data for save
 calib.n_pts_x = n_pts_x;
