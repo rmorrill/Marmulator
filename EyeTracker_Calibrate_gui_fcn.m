@@ -93,6 +93,21 @@ show_all_bounding_boxes = s.show_all_bounding_boxes;
 bounding_rect_size_x = s.bounding_rect_size_x;
 bounding_rect_size_y = s.bounding_rect_size_y;
 manual_bounding_boxes = s.manual_bounding_boxes;
+if isfield(s,'bounding_rect_size_stim_pre_dot_x') && ~isempty(s.bounding_rect_size_stim_pre_dot_x) 
+    bounding_rect_size_stim_pre_dot_x = s.bounding_rect_size_stim_pre_dot_x;
+else
+    bounding_rect_size_stim_pre_dot_x = bounding_rect_size_x;
+end
+if isfield(s,'bounding_rect_size_stim_pre_dot_y') && ~isempty(s.bounding_rect_size_stim_pre_dot_y) 
+    bounding_rect_size_stim_pre_dot_y = s.bounding_rect_size_stim_pre_dot_y;
+else
+    bounding_rect_size_stim_pre_dot_y = bounding_rect_size_y; 
+end
+if isfield(s,'manual_bounding_boxes stim_pre_dot') && ~isempty(s.manual_bounding_boxes_stim_pre_dot)
+    manual_bounding_boxes_stim_pre_dot = s.manual_bounding_boxes_stim_pre_dot;
+else
+    manual_bounding_boxes_stim_pre_dot = manual_bounding_boxes; 
+end
 trial_mode = s.trial_mode;
 reward_on = s.reward_on;
 %time_to_reward = s.time_to_reward;
@@ -515,6 +530,17 @@ else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
 end
 
+bounding_rect_stim_pre_dot_tmp = [0,0,bounding_rect_size_stim_pre_dot_x, bounding_rect_size_stim_pre_dot_y];
+if ~isempty(manual_bounding_boxes_stim_pre_dot)
+    if apply_gaze_center_adj
+        manual_bounding_boxes_stim_pre_dot = OffsetRect(manual_bounding_boxes_stim_pre_dot,gaze_center_adj_x, gaze_center_adj_y);
+    end
+    bounding_rects_stim_pre_dot = manual_bounding_boxes_stim_pre_dot;
+else
+    bounding_rects_stim_pre_dot = CenterRectOnPoint(bounding_rect_stim_pre_dot_tmp,all_pts(:,1),all_pts(:,2));
+end
+
+
 n_trs_tot = n_calib_pts*trs_per_location;
 
 
@@ -695,6 +721,7 @@ for i = 1:n_trs_tot
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
+        curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:); 
         test_stim_tr_idx = test_stim_tr_idx + 1;
     else
         % put stim rect around center
@@ -702,6 +729,7 @@ for i = 1:n_trs_tot
         ycurr = y_cent;
         stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], xcurr, ycurr);
         curr_bb = stim_rect;
+        curr_bb_stim_pre_dot = stim_rect;
     end
     
     drawInfoText();
@@ -757,7 +785,7 @@ for i = 1:n_trs_tot
             end
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
-            curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
+            curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb_stim_pre_dot);
             
             pre_stim_timer = GetSecs() - stps;
             [~,~,kCode] = KbCheck(0);
@@ -1374,6 +1402,8 @@ end
 
 calib_settings.bounding_box_x = unique(bounding_rects(:,3)-bounding_rects(:,1));
 calib_settings.bounding_box_y =unique(bounding_rects(:,4)-bounding_rects(:,2));
+calib_settings.bounding_box_x_stim_pre_dot = unique(bounding_rects_stim_pre_dot(:,3)-bounding_rects_stim_pre_dot(:,1));
+calib_settings.bounding_box_y_stim_pre_dot =unique(bounding_rects_stim_pre_dot(:,4)-bounding_rects_stim_pre_dot(:,2));
 calib_settings.draw_gaze_pt = draw_gaze_pt;
 calib_settings.n_gaze_pts_draw = n_gaze_pts_draw;
 calib_settings.gaze_pt_dot_col = gaze_pt_dot_col;
@@ -1512,20 +1542,23 @@ end
         
         if apply_calib
             if ~isempty(cProj)
-                cProj
                 raw_eye = [eyepos_x_tmp,eyepos_y_tmp];
                 T = [cX,cY,cProj];
                 transformed_eye = homography_transform(raw_eye,T); 
                 eyepos_x(idx_all) = transformed_eye(:,1);
                 eyepos_y(idx_all) = transformed_eye(:,2);
             else
-                if length(cX) == 3
+                if length(cX) == 4
+                    eyepos_x(idx_all) = eyepos_x_tmp * cX(2) + eyepos_y_tmp * cX(3) + eyepos_x_tmp.*eyepos_y_tmp * cX(4) + cX(1); 
+                elseif length(cX) == 3
                     eyepos_x(idx_all) = eyepos_x_tmp*cX(2) + eyepos_y_tmp*cX(3) + cX(1);
                 elseif length(cX) == 2
                     eyepos_x(idx_all) = eyepos_x_tmp*cX(2) + cX(1);
                 end
                 
-                if length(cY) == 3
+                if length(cY) ==4
+                     eyepos_y(idx_all) = eyepos_y_tmp * cY(2) + eyepos_x_tmp * cY(3) + eyepos_x_tmp.*eyepos_y_tmp * cY(4) + cY(1); 
+                elseif length(cY) == 3
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + eyepos_x_tmp*cY(3) + cY(1);
                 elseif length(cY) == 2
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + cY(1);
@@ -1595,13 +1628,17 @@ end
         end
         
         Screen('DrawText', win_ctrl, sprintf('Calibration loaded: %d', apply_calib), 80, win_rect(4)+160, textcol);
-        if length(cX) == 3
+        if length(cX) ==4
+            Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f %0.1f', cX(1), cX(2), cX(3),cX(4)), 80, win_rect(4)+180, textcol);
+        elseif length(cX) == 3
             Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f', cX(1), cX(2), cX(3)), 80, win_rect(4)+180, textcol);
         elseif length(cX) == 2
             Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f', cX(1), cX(2)), 80, win_rect(4)+180, textcol);
         end
         
-        if length(cY) ==3
+        if length(cY) ==4
+            Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f %0.1f', cY(1), cY(2), cY(3),cY(4)), 80, win_rect(4)+200, textcol);
+        elseif length(cY) ==3
             Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f', cY(1), cY(2), cY(3)), 80, win_rect(4)+200, textcol);
         elseif length(cY) == 2
             Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f', cY(1), cY(2)), 80, win_rect(4)+200, textcol);
@@ -1634,12 +1671,15 @@ end
         if show_curr_bounding_box
             if seqidx ~= 0
                 Screen('FrameRect', win_ctrl, cols(seqidx+1,:), curr_bb, 5);
+                Screen('FrameRect',win_ctrl,cols(seqidx+1,:), curr_bb_stim_pre_dot,5); 
             else
                 Screen('FrameRect', win_ctrl, whitecol, curr_bb, 5);
+                Screen('FrameRect',win_ctrl,whitecol,curr_bb_stim_pre_dot,5); 
             end
         end
         if show_all_bounding_boxes && seqidx ~= 0
             Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects', 1);
+            Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot',1); 
         end
     end
 

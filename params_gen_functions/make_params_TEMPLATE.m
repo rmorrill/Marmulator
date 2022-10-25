@@ -3,7 +3,7 @@ function make_params_TEMPLATE()
 %%%%% THIS IS INTENDED AS A COMPLETE TEMPLATE - MAKE A COPY OF THIS FILE TO
 %%%%% MAKE YOUR OWN PARAMETER GENERATION FUNCTIONS 
 
-save_params_name = 'grid_3_3_brad_6deg_y_offset_90_x_offset_-20_bbox_200'; % e.g. 'grid_3_3_foraging_yj_wrenches_camels_6deg'; 
+save_params_name = 'rsvp_center_brad_smaller_stim_pre_dot_bbox'; % e.g. 'grid_3_3_foraging_yj_wrenches_camels_6deg'; 
 save_base = 'C:\MATLAB\Marmulator'; % e.g. 'C:\MATLAB\Marmulator'; 
 
 %% SETTINGS:
@@ -14,10 +14,10 @@ skip_sync_tests = 1;
 calibration_win_len = 200;
 calibration_win_ht = 200; 
 
-n_pts_x = 3; % how many different x grid locations
-n_pts_y = 3; % how many different y grid locations 
+n_pts_x = 1; % how many different x grid locations
+n_pts_y = 1; % how many different y grid locations 
 repeats_per_stim = 10; % along w n_pts_x and n_pts_y, determines number of trials: n_pts_x * n_pts_y * repeats_per_stim 
-presentation_time = 500; % ms
+presentation_time = 300; % ms
 inter_stim_interval = [1000 2000];
 iti_random = false;
 order = 'random'; % or 'sequential'
@@ -29,8 +29,8 @@ stim_rect_size_y = 90; %
 show_curr_bounding_box = true;
 show_all_bounding_boxes = true;
 
-bounding_rect_size_x = 200;
-bounding_rect_size_y =200; 
+bounding_rect_size_x = 100;
+bounding_rect_size_y =100;
 
 manual_bounding_boxes = []; % empty for automoatic OR e.g. [0, 0, 768, 432; 768,0,1536,432; 0,432,768,864; 768,432,1536,864];
 
@@ -70,7 +70,7 @@ reverse_rate_sz = 0.2;
 
 % rsvp - if n_rsvp>1, this will use 'rsvp mode' and trial_mode must be set
 % to 'foraging'
-n_rsvp = 1; 
+n_rsvp = 3; 
 rsvp_iti_t = 200; 
 break_after = 300; 
 
@@ -79,6 +79,9 @@ stimulus_pre_dot = true;
 stimulus_pre_dot_disappear = true; 
 stimulus_pre_time = 500; %ms, does not apply if require_fix_tr_init
 stim_pre_dot_sz = 8;
+
+bounding_rect_size_stim_pre_dot_x = 50; 
+bounding_rect_size_stim_pre_dot_y = 50; 
 
 % require fixation for trial start
 require_fix_tr_init = true;
