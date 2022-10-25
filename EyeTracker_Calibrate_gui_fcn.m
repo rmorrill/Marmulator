@@ -1,3 +1,4 @@
+
 function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
     subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
@@ -5,7 +6,10 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ... 
     trigger_arduino, setup_config)
 
-%keyboard
+
+profile_memory = false; % flag for tracking memory usage
+% if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
+% workspace for debugging
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -191,6 +195,10 @@ gaze_center_adj_x = setup_config.default_gaze_center_adjust(1);
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2); 
 apply_gaze_center_adj = true;
 
+%% photodiode flash 
+photodiode_flash = true; 
+flash_rect_size = [90 90]; 
+
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
 %     gaze_center_adj_x = s.gaze_center_adj_x;
@@ -371,11 +379,16 @@ Screen('BlendFunction', win, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 [x_cent, y_cent] = RectCenter(win_rect);
 
+if photodiode_flash
+    flash_rect = [win_rect(3)-flash_rect_size(1), win_rect(4)-flash_rect_size(2),...
+        win_rect(3), win_rect(4)]; 
+end
+
 
 % turn on session trigger 
 if trig_flag
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
-    WaitSecs(0.05); 
+    WaitSecs(0.05);
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
 end
 
@@ -524,7 +537,6 @@ if ~isempty(manual_bounding_boxes)
     if apply_gaze_center_adj
         manual_bounding_boxes = OffsetRect(manual_bounding_boxes, gaze_center_adj_x, gaze_center_adj_y);
     end
-    
     bounding_rects = manual_bounding_boxes;
 else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
@@ -553,8 +565,6 @@ if strcmp(position_order, 'random')
 else
     tr_seq = repmat(1:n_calib_pts, 1, trs_per_location);
 end
-
-
 
 if wake_up_trials
     y = nan(1,n_trs_tot); 
@@ -698,6 +708,12 @@ mov_dur = [];
 fix_pre_fr_ctr = 0;
 test_stim_tr_idx = 0; 
 
+if profile_memory
+    mem_used = nan(1,n_trs_tot);
+    avail_sys_mem = nan(1,n_trs_tot);
+    avail_phys_mem = nan(1,n_trs_tot);
+end
+
 % start the stimulus loop
 for i = 1:n_trs_tot
     
@@ -779,7 +795,7 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
-            if ~trial_trig_hi && trig_flag
+            if trig_flag && ~trial_trig_hi 
                 IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
                 trial_trig_hi = 1; 
             end
@@ -851,11 +867,13 @@ for i = 1:n_trs_tot
         end_stim = 0;
     end
     blink_ctr = 0;
-    rsvp_ctr = 1; 
-    rsvp_break_ctr = 0; 
-    inter_rsvp_fr_ctr = 1; 
-    pulse_t_idx = 0; % for size-pulsed imaged 
-    stim_trig_hi = 0; 
+    rsvp_ctr = 1;
+    rsvp_break_ctr = 0;
+    inter_rsvp_fr_ctr = 1;
+    pulse_t_idx = 0; % for size-pulsed imaged
+    stim_trig_hi = 0;
+    tex1 = [];
+    tex2 = [];
     
     % ENTER STIMULUS 
     while ~end_stim && ~exit_flag % loops for every frame 
@@ -868,7 +886,7 @@ for i = 1:n_trs_tot
         end
         %rsvpfridx
         if strcmp(stim_mode, 'images')
-        img_idx = img_seq(rsvp_ctr, test_stim_tr_idx);
+            img_idx = img_seq(rsvp_ctr, test_stim_tr_idx);
         end
         stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
@@ -1096,14 +1114,30 @@ for i = 1:n_trs_tot
                 end
             end
             
+            if photodiode_flash && ~inter_rsvp
+                if rsvp_mode
+                    whichflash = mod(rsvpfridx, 2);
+                else
+                    whichflash = mod(stfridx, 2);
+                end
+                
+                if whichflash
+                    Screen('FillRect', win, blackcol, flash_rect);
+                    Screen('FillRect', win_ctrl, blackcol, flash_rect);
+                else
+                    Screen('FillRect', win, whitecol, flash_rect);
+                    Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                end
+            end
+            
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
-            if ~stim_trig_hi && ~inter_rsvp && trig_flag
-                disp('stim trig on'); 
+            if trig_flag && ~stim_trig_hi && ~inter_rsvp
+                %disp('stim trig on'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
                 stim_trig_hi = 1; 
-            elseif stim_trig_hi && inter_rsvp && trig_flag
-                  disp('stim trig off'); 
+            elseif trig_flag && stim_trig_hi && inter_rsvp
+                %  disp('stim trig off'); 
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0; 
             end
@@ -1111,9 +1145,12 @@ for i = 1:n_trs_tot
             %if strcmp(stim_mode, 'movie')
             %    Screen('Close', movtex);
             %end
-            if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
+            %if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
+            if ~isempty(tex1)    %tex1 
                 Screen('Close', tex1);
                 Screen('Close', tex2);
+                tex1 = []; 
+                tex2 = []; 
             end
         end
         
@@ -1179,15 +1216,13 @@ for i = 1:n_trs_tot
         if end_stim
             calib_end_t(i) = GetSecs()-t_start_sec;
             if trig_flag
-                disp('stim trig off');
+                %disp('stim trig off');
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0;
             end
         end
         
         if end_stim
-           % sca
-           % keyboard
             Screen('FillRect', win, bg_col_val);
             Screen('FillRect', win_ctrl, bg_col_val);
             
@@ -1203,8 +1238,8 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
-            % turn off trial trigger
             if trig_flag
+                % turn off trial trigger
                 IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
             end
             
@@ -1294,17 +1329,9 @@ for i = 1:n_trs_tot
                     vbl = Screen('Flip', win, vbl + halfifi);
                     vbl2 = Screen('Flip', win_ctrl, vbl + halfifi);
                 end
-                %fprintf('Punish off\n');
             end
         end
     end
-    
-%     if strcmp(stim_mode, 'images') && ~rsvp_mode
-%         img_idx = img_idx + 1;
-%         if img_idx > nr_imgs
-%             img_idx = 1;
-%         end
-%     end
     
     if seqidx == 0
         wu_img_idx = wu_img_idx +1;
@@ -1317,11 +1344,13 @@ for i = 1:n_trs_tot
         break
     end
     
+    if profile_memory
+        [u,m] = memory;
+        mem_used(i) = u.MemUsedMATLAB;
+        avail_sys_mem(i) = m.PhysicalMemory.Available;
+        avail_phys_mem(i) = m.SystemMemory.Available;
+    end
 end
-
-
-%sca
-%keyboard
 
 Screen('FillRect', win, bg_col_val);
 Screen('FillRect', win_ctrl, bg_col_val);
@@ -1334,16 +1363,22 @@ t2 = GetSecs;
 Screen('CloseAll');
 sca
 
-% turn off session trigger 
 if trig_flag
+    % turn off session trigger
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
-    WaitSecs(0.05); 
+    WaitSecs(0.05);
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
     % ensure everything else is off
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
 end
 
+
+if profile_memory 
+    assignin('base', 'mem_used', mem_used); 
+    assignin('base', 'avail_sys_mem', avail_sys_mem); 
+    assignin('base', 'avail_phys_mem', avail_phys_mem); 
+end
 
 %% gather data for save
 calib.n_pts_x = n_pts_x;

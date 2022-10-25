@@ -1069,6 +1069,7 @@ reward_today = str2double(char(regexp(get(reward_today_txt_hand, 'String'), '\d*
     
 function cleanUpFun(hObject, eventdata, handles)
 
+try 
 h = guidata(hObject); 
 if ~isempty(h.subject_file)
     reward_today = getRewardTodayFromTxt(h.reward_today_txt); 
@@ -1079,7 +1080,7 @@ if h.pump_arduino_connected
     fid = instrfind('Port', h.arduino_comport);
     fclose(fid);
     delete(h.reward_arduino);
-    disp('Arduino disconnected');
+    disp('Pump arduino disconnected');
 end
 
 if h.pump_serial_connected
@@ -1087,7 +1088,16 @@ if h.pump_serial_connected
     disp('Pump via serial disconnected');
 end
 
-delete(hObject); 
+
+if h.trig_arduino_connected
+    IOPort('Flush', h.trigger_arduino.ahand); 
+    IOPort('Close', h.trigger_arduino.ahand);    
+    disp('Trigger arduino disconnected');
+end
+
+catch me
+end
+delete(hObject);
 
 
 
@@ -1205,6 +1215,7 @@ if ~handles.trig_arduino_connected
         trigger_arduino.stim_pin = 10; 
         assign_trigger_pins(trigger_arduino); 
         handles.trigger_arduino = trigger_arduino;
+        handles.trigger_arduino_comport = port; 
     else
         fprintf('ERROR CONNECTING TO %s\n', port);
         fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
@@ -1217,6 +1228,7 @@ else
     set(gcbo, 'String', 'Connect');
     handles.trig_arduino_connected = 0;
     fprintf('Disconnecting from port %s\n', port);
+    handles.trigger_arduino_comport = []; 
 end
 
 guidata(hObject, handles);
