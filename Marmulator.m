@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 18-Oct-2022 19:45:24
+% Last Modified by GUIDE v2.5 13-Oct-2022 13:42:54
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -54,39 +54,7 @@ function Marmulator_OpeningFcn(hObject, eventdata, handles, varargin)
 
 % Choose default command line output for Marmulator
 handles.output = hObject;
-
-% first check for setup params
-m = mfilename('fullpath'); 
-mdir = fileparts(m); 
-setup_params_file = fullfile(mdir, 'setup_config.mat'); 
-if ~exist(setup_params_file, 'file')
-    % complain 
-    warndlg(sprintf('No setup config found in %s, edit and run setup_marmulator.m', mdir), 'Setup not found'); 
-    handles.sc = []; 
-    handles.base_dir = mdir; 
-    handles.default_calib_dir = mdir; 
-else
-    sc = load(setup_params_file); 
-    set(handles.com_serial_edit, 'String', sc.serial_pump_comport); 
-    set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport)
-    set(handles.com_edit, 'String', sc.arduino_pump_comport); 
-    set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
-    handles.base_dir = sc.marmulator_base_dir;
-    handles.default_calib_dir = sc.save_dir_local; 
-    handles.setup_config = sc; 
-end
-
-logo_file = fullfile(handles.base_dir, 'gui', 'marmulator_logo.png'); 
-if isfile(logo_file)
-    logo_img = imread(logo_file); 
-    axes(handles.logo_axes); 
-    imshow(logo_img); 
-else
-    delete(handles.logo_axes)
-end
-
-handles.trig_arduino_connected = 0; 
-handles.pump_arduino_connected = 0; 
+handles.arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
 %handles.reward_pin = 10; 
@@ -94,20 +62,15 @@ handles.reward_pin = 4;
 handles.reward_today = 0; % start reward counter at 0 mL 
 handles.calibration_loaded = false; 
 handles.calib_file = []; 
-
+handles.default_calib_dir = 'C:\MATLAB\eyetracker_calibration_071222\calib_data\calib_coeffs'; 
+handles.base_dir = 'C:\MATLAB\Marmulator\'; 
 handles.subject = []; 
 handles.subject_file = []; 
 curr_date = datestr(now, 'yyyy-mm-dd');
 handles.curr_date = curr_date; 
 
-% ensure that directories exist 
-ppdir = fullfile(handles.base_dir, 'gui'); 
-if ~exist(ppdir) 
-    mkdir(ppdir); 
-end
-
 % load the pump parameters
-handles.ppfile = fullfile(ppdir, 'pump_params.mat');
+handles.ppfile = fullfile(handles.base_dir, 'gui', 'pump_params.mat');
 if exist(handles.ppfile)
     pp = load(handles.ppfile);
     handles.reward_vol = pp.reward_vol; 
@@ -121,6 +84,7 @@ else
     handles.reward_rate = str2double(get(handles.rate_edit, 'String'));
     handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
 end
+
 
 flist = dir([handles.expt_params_dir '\*.mat']); 
 flist = flist(~[flist.isdir]); 
@@ -158,25 +122,25 @@ function connect_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 handles.arduino_comport = get(handles.com_edit, 'String');
-if ~handles.pump_arduino_connected
+if ~handles.arduino_connected
     try
         handles.reward_arduino = arduino(handles.arduino_comport);
         flush(handles.reward_arduino);
         %set(gcbo, 'Enable', 'off')
         handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
-        handles.pump_arduino_connected = 1;
+        handles.arduino_connected = 1;
         set(gcbo, 'String', 'Disconnect')
     catch me
         disp(me);
         disp('Arduino not connected!');
-        handles.pump_arduino_connected = 0;
+        handles.arduino_connected = 0;
     end
 else
     fid = instrfind('Port', handles.arduino_comport); 
     fclose(fid); 
     delete(handles.reward_arduino);
     handles.reward_arduino = []; 
-    handles.pump_arduino_connected = 0;
+    handles.arduino_connected = 0;
     set(gcbo, 'String', 'Connect Arduino')
     disp('Arduino disconnected'); 
 end
@@ -211,7 +175,7 @@ function reward_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 %keyboard
-if handles.pump_arduino_connected
+if handles.arduino_connected
     handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
     %WaitSecs(0.1);
     WaitSecs(0.);
@@ -249,13 +213,7 @@ function run_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 
-if ~isfield(handles, 'params_file') || isempty(handles.params_file)
-    fprintf('No expt params file selected!\n'); 
-    return
-end
-
-
-if handles.pump_arduino_connected 
+if handles.arduino_connected 
     ra = handles.reward_arduino; 
 elseif handles.pump_serial_connected
     ra = handles.reward_serial; 
@@ -284,10 +242,6 @@ else
     handles.subject = subj_tmp; 
 end
 
-if ~handles.trig_arduino_connected
-    handles.trigger_arduino = []; 
-end
-
 gaze_offset_x = str2num(get(handles.offset_x_edit, 'String')); 
 gaze_offset_y = str2num(get(handles.offset_y_edit, 'String')); 
 gaze_offset =[gaze_offset_x, gaze_offset_y]; 
@@ -304,17 +258,13 @@ mouse_for_eye = get(handles.mouse_eye_check, 'Value');
 require_fix_tr_init = get(handles.require_fix_check, 'Value');  
 fixation_to_init = str2double(get(handles.fixation_edit, 'String')); 
 time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String')); 
-
-n_rsvp = str2double(get(handles.n_rsvp_edit, 'String')); 
-break_after = str2double(get(handles.break_after_edit, 'String')); 
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
-    handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
-    handles.trigger_arduino, handles.setup_config);
+    handles.reward_vol/1e3);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -390,12 +340,9 @@ if curridx == 1
     set(handles.mode_text, 'String', '');
     set(handles.stim_text, 'String', '');
     set(handles.n_x_y_string, 'String', '');
-    set(handles.fixation_edit, 'String', '');
-    set(handles.time_out_edit, 'String', '');
-    set(handles.require_fix_check, 'Value', 0);
-    set(handles.punish_time_edit, 'String', '');
-    set(handles.n_rsvp_edit, 'String', '');
-    set(handles.break_after_edit, 'String', '');
+    set(handles.fixation_edit, 'String', ''); 
+    set(handles.time_out_edit, 'String', ''); 
+    set(handles.require_fix_check, 'Value', 0); 
 else
     handles.params_file = fullfile(handles.expt_params_dir, flist{curridx});
     handles.params = load(handles.params_file);
@@ -404,8 +351,6 @@ else
     handles.hold_time = handles.params.time_to_reward;
     handles.response_time = handles.params.time_out_after;
     handles.trial_time = handles.params.presentation_time;
-    handles.punish_time = handles.params.punish_length_ms; 
-    
     if isfield(handles.params, 'require_fix_tr_init')
         handles.require_fix_tr_init = handles.params.require_fix_tr_init;
     else
@@ -422,37 +367,19 @@ else
         handles.time_out_trial_init_s = [];
     end
     
-    if isfield(handles.params, 'n_rsvp')
-        handles.n_rsvp = handles.params.n_rsvp; 
-    else
-        handles.n_rsvp = []; 
-    end
-    
-    if isfield(handles.params, 'break_after')
-        handles.break_after = handles.params.break_after; 
-    else
-        handles.break_after = []; 
-    end
     
     %keyboard
+    
     set(handles.trial_time_edit, 'String', sprintf('%d', handles.trial_time));
     set(handles.n_x_y_string, 'String', sprintf('[%d, %d]', handles.nr_pts_x_y(1), handles.nr_pts_x_y(2)));
     set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
     set(handles.hold_time_edit, 'String', sprintf('%d', handles.hold_time));
     set(handles.response_time_edit, 'String', sprintf('%d', handles.response_time));
-    if isfield(handles.params, 'n_rsvp') && handles.params.n_rsvp > 1
-        handles.trial_mode = 'rsvp';
-    else
-        handles.trial_mode = handles.params.trial_mode;
-    end
-    set(handles.mode_text, 'String', handles.trial_mode);
+    set(handles.mode_text, 'String', handles.params.trial_mode);
     set(handles.stim_text, 'String', handles.params.stim_mode);
     set(handles.require_fix_check, 'Value', handles.require_fix_tr_init);
-    set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init));
-    set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s));
-    set(handles.punish_time_edit, 'String', num2str(handles.punish_time));
-    set(handles.n_rsvp_edit, 'String', num2str(handles.n_rsvp)); 
-    set(handles.break_after_edit, 'String', num2str(handles.break_after)); 
+    set(handles.fixation_edit, 'String', num2str(handles.fixation_to_init)); 
+    set(handles.time_out_edit, 'String', num2str(handles.time_out_trial_init_s)); 
     
     if ~handles.require_fix_tr_init
         set(handles.fixation_edit, 'Enable', 'off');
@@ -464,24 +391,14 @@ else
     
     %keyboard
     
-    if strcmp(handles.trial_mode, 'foraging')
+    if strcmp(handles.params.trial_mode, 'foraging')
         set(handles.trial_time_edit,'Enable', 'off');
         set(handles.hold_time_edit, 'Enable', 'on');
         set(handles.response_time_edit, 'Enable', 'on');
-        set(handles.n_rsvp_edit, 'Enable', 'off'); 
-        set(handles.break_after_edit, 'Enable', 'off'); 
-    elseif strcmp(handles.trial_mode, 'trial')
+    elseif strcmp(handles.params.trial_mode, 'trial')
         set(handles.trial_time_edit,'Enable', 'on');
         set(handles.hold_time_edit, 'Enable', 'off');
         set(handles.response_time_edit, 'Enable', 'off');
-        set(handles.n_rsvp_edit, 'Enable', 'off'); 
-        set(handles.break_after_edit, 'Enable', 'off'); 
-    elseif strcmp(handles.trial_mode, 'rsvp')
-        set(handles.trial_time_edit,'Enable', 'on');
-        set(handles.hold_time_edit, 'Enable', 'off');
-        set(handles.response_time_edit, 'Enable', 'off');
-        set(handles.n_rsvp_edit, 'Enable', 'on'); 
-        set(handles.break_after_edit, 'Enable', 'on'); 
     end
 end
 
@@ -557,9 +474,6 @@ new_subject = get(gcbo, 'String');
 handles.subject = new_subject; 
 %handles.reward_total = 0; 
 log_dir = fullfile(handles.base_dir, 'subject_logs');
-if ~exist(log_dir)
-    mkdir(log_dir); 
-end
 handles.subject_file = fullfile(log_dir, [handles.subject '.mat']); 
 if ~exist(handles.subject_file, 'file')
     questans = questdlg(sprintf('No subject log exists for %s. Would you like to make one?', handles.subject),...
@@ -908,7 +822,7 @@ if ~handles.pump_serial_connected
     catch me
         disp(me);
         disp('Serial not connected!');
-        handles.pump_serial_connected = 0;
+        handles.arduino_connected = 0;
     end
 else
     %fid = instrfind('Port', handles.pump_serial_comport);
@@ -1075,7 +989,7 @@ if ~isempty(h.subject_file)
     updateSubjectLogTable(h.subject_file, reward_today, h.curr_date);
 end
 
-if h.pump_arduino_connected
+if h.arduino_connected
     fid = instrfind('Port', h.arduino_comport);
     fclose(fid);
     delete(h.reward_arduino);

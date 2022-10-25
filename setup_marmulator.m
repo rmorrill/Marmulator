@@ -2,19 +2,20 @@
 
 %%%% Set these parameters: 
 marmulator_base_dir = 'C:\MATLAB\Marmulator'; 
-save_dir_local = 'C:\Data'; 
+save_dir_local = 'C:\MATLAB\eyetracker_calibration_071222\calib_data'; 
 save_dir_remote = 'Z:\Data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
-eyetracker_toolbox_dir = 'C:\Users\Alex\Desktop\M2 EYETRACKER\Interfaces\3rdParty\Microsoft-Windows\MATLAB\ViewPoint_EyeTracker_Toolbox'; 
+eyetracker_toolbox_dir = 'C:\Users\Hector\Desktop\eyetracker\Interfaces\3rdParty\Microsoft-Windows\MATLAB\ViewPoint_EyeTracker_Toolbox'; 
 
-serial_pump_comport = 'COM3'; 
+serial_pump_comport = 'COM9'; 
 arduino_pump_comport = ''; 
 arduino_lickometer_comport = ''; 
-arduino_triggers_comport = 'COM4'; 
+arduino_triggers_comport = ''; 
 
 default_gaze_center_adjust = [0, 210]; % [x, y]
+default_gaze_center_adjust = [-20,90]; %2022-10-24
 
-screenid_stim = 2; 
-screenid_ctrl = 1; 
+screenid_stim = 1; 
+screenid_ctrl = 2; 
 
 %%%% DO NOT MODIFY %%%%
 setup_date = datestr(now, 'yyyy-mm-dd_HH-MM_SS'); 
