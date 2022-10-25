@@ -115,7 +115,7 @@ end
 T{curridx,15} = calib.n_completed;
 T{curridx,16} = reward.nr_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze 
 
-T{curridx,17} = T{curridx,15}/calib.n_completed;
+T{curridx,17} = T{curridx,16}/calib.n_completed;
 T{curridx,18} = cumulative_n_trials + T{curridx,15}; 
 T = cell2table(T); 
 T.Properties.VariableNames = columns;
