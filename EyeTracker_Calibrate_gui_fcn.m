@@ -332,8 +332,11 @@ end
 
 
 %%
-Screen('Preference', 'Verbosity', 0);
-Screen('Preference', 'SkipSyncTests', skip_sync_tests)
+%Screen('Preference', 'Verbosity', 0);
+Screen('Preference', 'Verbosity', 1);
+%Screen('Preference', 'SkipSyncTests', skip_sync_tests)
+%keyboard
+Screen('Preference', 'SkipSyncTests', 0)
 Screen('Preference', 'VisualDebugLevel', 0)
 
 %screenid_stim = max(Screen('Screens'));
@@ -400,7 +403,6 @@ if color_shift_feedback
     col_shift_change(3,:) = linspace(rew_col_start(3), rew_col_end(3), n_frames_til_rew);
     col_shift_change(4,:) = ones(1,n_frames_til_rew)*0.5;
 end
-
 
 calib_rect = [0 0 calibration_win_len, calibration_win_ht];
 calib_rect_cent = CenterRectOnPoint(calib_rect, x_cent, y_cent);
@@ -855,6 +857,7 @@ for i = 1:n_trs_tot
         else
             inter_rsvp = false;
             rsvpfridx = rsvpfridx + 1;
+           %rsvpfridx
         end
         %rsvpfridx
         if strcmp(stim_mode, 'images')
@@ -880,7 +883,8 @@ for i = 1:n_trs_tot
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
             
-            %curr_in_bb = IsInRect(eyepos_x(idx_all), eyepos_y(idx_all), curr_bb);
+            
+            
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
             eye_in_bb_curr(stfridx) = curr_in_bb;
             
@@ -1094,11 +1098,11 @@ for i = 1:n_trs_tot
                 end
                 
                 if whichflash
-                    Screen('FillRect', win, blackcol, flash_rect);
-                    Screen('FillRect', win_ctrl, blackcol, flash_rect);
-                else
                     Screen('FillRect', win, whitecol, flash_rect);
                     Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                else
+                    Screen('FillRect', win, blackcol, flash_rect);
+                    Screen('FillRect', win_ctrl, blackcol, flash_rect);
                 end
             end
             
@@ -1114,10 +1118,6 @@ for i = 1:n_trs_tot
                 stim_trig_hi = 0; 
             end
             
-            %if strcmp(stim_mode, 'movie')
-            %    Screen('Close', movtex);
-            %end
-            %if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
             if ~isempty(tex1)    %tex1 
                 Screen('Close', tex1);
                 Screen('Close', tex2);
@@ -1133,15 +1133,17 @@ for i = 1:n_trs_tot
         if rsvp_mode && rsvpfridx >= stim_frames
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
-            rsvpfridx = 1;
+            rsvpfridx_old = rsvpfridx; 
+            rsvpfridx = 0;
+            
         end
         
         % check if we need to end
         if trial_init_timed_out(i)
-             end_stim = 1;
+            end_stim = 1;
         elseif strcmp(trial_mode, 'trial') || seqidx == 0
             if ~rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames % finished successfully
-                end_stim = 1; 
+                end_stim = 1;
             elseif rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
@@ -1183,17 +1185,6 @@ for i = 1:n_trs_tot
             manual_reward_flag = true;
         end
         
-        
-        % if ending, note the time:
-        if end_stim
-            calib_end_t(i) = GetSecs()-t_start_sec;
-            if trig_flag
-                %disp('stim trig off');
-                IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
-                stim_trig_hi = 0;
-            end
-        end
-        
         if end_stim
             Screen('FillRect', win, bg_col_val);
             Screen('FillRect', win_ctrl, bg_col_val);
@@ -1210,7 +1201,12 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi);
             
+           % if ending, note the time:
+            calib_end_t(i) = GetSecs()-t_start_sec;
             if trig_flag
+                %disp('stim trig off');
+                IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+                stim_trig_hi = 0;
                 % turn off trial trigger
                 IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
             end
@@ -1344,7 +1340,6 @@ if trig_flag
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
 end
-
 
 if profile_memory 
     assignin('base', 'mem_used', mem_used); 
@@ -1620,7 +1615,7 @@ end
         Screen('DrawText', win_ctrl, sprintf('%d auto reward, %d manual (reward on %s)', reward_ct, man_reward_ct, reward_on), 80, win_rect(4)+55, textcol);
         Screen('DrawText', win_ctrl, sprintf('eyetracking: %s', eye_method), 80, win_rect(4)+80, textcol);
         Screen('FrameRect', win_ctrl, [0 0 0], win_rect, 1);
-        Screen('DrawText', win_ctrl, sprintf('display screen'), mean([win_rect(1), win_rect(3)])-70, win_rect(4), textcol);
+       % Screen('DrawText', win_ctrl, sprintf('display screen'), mean([win_rect(1), win_rect(3)])-70, win_rect(4), textcol);
         
         if strcmp(trial_mode, 'foraging')
             Screen('DrawText', win_ctrl, sprintf('foraging: time out %dms, reward %dms', time_out_after, time_to_reward), ...
@@ -1646,8 +1641,8 @@ end
             Screen('DrawText', win_ctrl, sprintf('calib proj: %0.1f, %0.1f', cProj(1), cProj(2)), 80, win_rect(4)+220, textcol);
         end
         
-        Screen('DrawText', win_ctrl, sprintf('gaze offset x: %0.3f', gaze_offset_x), 580, win_rect(4)+180, textcol);
-        Screen('DrawText', win_ctrl, sprintf('gaze offset y: %0.3f', gaze_offset_y), 580, win_rect(4)+200, textcol);
+        Screen('DrawText', win_ctrl, sprintf('gaze offset x,y: %0.3f, %0.3f', gaze_offset_x, gaze_offset_y), 580, win_rect(4)+180, textcol);
+        %Screen('DrawText', win_ctrl, sprintf('gaze offset y: %0.3f', gaze_offset_y), 580, win_rect(4)+200, textcol);
         
         if give_punishments
             Screen('DrawText', win_ctrl, sprintf('give time-out punish: %d, dur: %dms, nr punish: %d', give_punishments, punish_length_ms,...
@@ -1659,9 +1654,7 @@ end
         Screen('DrawText', win_ctrl, sprintf('Fixation required for tr start: %d', require_fix_tr_init),  800, win_rect(4)+55, textcol);
         Screen('DrawText', win_ctrl, sprintf('Pre-stim time in box: %dms\n', round(fix_pre_fr_ctr*ifi*1e3)), 800, win_rect(4)+80, textcol);
         Screen('DrawText', win_ctrl, sprintf('Time pre-stim total: %dms\n', round(pre_stim_timer*1e3)), 800, win_rect(4)+105, textcol);
-        
-        
-        
+
         Screen('DrawText', win_ctrl, sprintf('Subject: %s, Session: %s', subject, session_time), 740, win_rect(4)+280);
     end
 
