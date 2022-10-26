@@ -783,7 +783,7 @@ for i = 1:n_trs_tot
             %for j = 1:stimulus_pre_frames
             idx_all = idx_all +1;
             drawInfoText();
-            drawBoundingBoxes();
+            drawBoundingBoxes(curr_bb_stim_pre_dot);
             if seqidx ~= 0
                 Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                 Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
@@ -1702,19 +1702,21 @@ end
         Screen('DrawText', win_ctrl, sprintf('Subject: %s, Session: %s', subject, session_time), 740, win_rect(4)+280);
     end
 
-    function drawBoundingBoxes()
+    function drawBoundingBoxes(curr_bb_stim_pre_dot)
         if show_curr_bounding_box
-            if seqidx ~= 0
+            if nargin>0 && seqidx ~= 0
+                Screen('FrameRect',win_ctrl,cols(seqidx+1,:), curr_bb_stim_pre_dot,5);
+            elseif nargin>0 && seqidx == 0
+                Screen('FrameRect',win_ctrl,whitecol,curr_bb_stim_pre_dot,5);
+            elseif nargin ==0 && seqidx ~= 0
                 Screen('FrameRect', win_ctrl, cols(seqidx+1,:), curr_bb, 5);
-                Screen('FrameRect',win_ctrl,cols(seqidx+1,:), curr_bb_stim_pre_dot,5); 
-            else
+            else nargin == 0 && seqidx == 0
                 Screen('FrameRect', win_ctrl, whitecol, curr_bb, 5);
-                Screen('FrameRect',win_ctrl,whitecol,curr_bb_stim_pre_dot,5); 
             end
         end
         if show_all_bounding_boxes && seqidx ~= 0
             Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects', 1);
-            Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot',1); 
+            Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot',1);
         end
     end
 
