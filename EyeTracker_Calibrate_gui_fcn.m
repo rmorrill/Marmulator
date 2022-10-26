@@ -6,7 +6,10 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
     trigger_arduino, setup_config)
 
-%keyboard
+
+profile_memory = false; % flag for tracking memory usage
+% if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
+% workspace for debugging
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -95,6 +98,21 @@ show_all_bounding_boxes = s.show_all_bounding_boxes;
 bounding_rect_size_x = s.bounding_rect_size_x;
 bounding_rect_size_y = s.bounding_rect_size_y;
 manual_bounding_boxes = s.manual_bounding_boxes;
+if isfield(s,'bounding_rect_size_stim_pre_dot_x') && ~isempty(s.bounding_rect_size_stim_pre_dot_x) 
+    bounding_rect_size_stim_pre_dot_x = s.bounding_rect_size_stim_pre_dot_x;
+else
+    bounding_rect_size_stim_pre_dot_x = bounding_rect_size_x;
+end
+if isfield(s,'bounding_rect_size_stim_pre_dot_y') && ~isempty(s.bounding_rect_size_stim_pre_dot_y) 
+    bounding_rect_size_stim_pre_dot_y = s.bounding_rect_size_stim_pre_dot_y;
+else
+    bounding_rect_size_stim_pre_dot_y = bounding_rect_size_y; 
+end
+if isfield(s,'manual_bounding_boxes stim_pre_dot') && ~isempty(s.manual_bounding_boxes_stim_pre_dot)
+    manual_bounding_boxes_stim_pre_dot = s.manual_bounding_boxes_stim_pre_dot;
+else
+    manual_bounding_boxes_stim_pre_dot = manual_bounding_boxes; 
+end
 trial_mode = s.trial_mode;
 reward_on = s.reward_on;
 %time_to_reward = s.time_to_reward;
@@ -367,6 +385,11 @@ if ctrl_screen
 end
 
 [x_cent, y_cent] = RectCenter(win_rect);
+if photodiode_flash
+    flash_rect = [win_rect(3)-flash_rect_size(1), win_rect(4)-flash_rect_size(2),...
+        win_rect(3), win_rect(4)]; 
+end
+
 
 % turn on session trigger
 if trig_flag
@@ -521,6 +544,17 @@ else
     bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
 end
 
+bounding_rect_stim_pre_dot_tmp = [0,0,bounding_rect_size_stim_pre_dot_x, bounding_rect_size_stim_pre_dot_y];
+if ~isempty(manual_bounding_boxes_stim_pre_dot)
+    if apply_gaze_center_adj
+        manual_bounding_boxes_stim_pre_dot = OffsetRect(manual_bounding_boxes_stim_pre_dot,gaze_center_adj_x, gaze_center_adj_y);
+    end
+    bounding_rects_stim_pre_dot = manual_bounding_boxes_stim_pre_dot;
+else
+    bounding_rects_stim_pre_dot = CenterRectOnPoint(bounding_rect_stim_pre_dot_tmp,all_pts(:,1),all_pts(:,2));
+end
+
+
 n_trs_tot = n_calib_pts*trs_per_location;
 
 
@@ -533,8 +567,6 @@ if strcmp(position_order, 'random')
 else
     tr_seq = repmat(1:n_calib_pts, 1, trs_per_location);
 end
-
-
 
 if wake_up_trials
     y = nan(1,n_trs_tot);
@@ -678,6 +710,12 @@ mov_dur = [];
 fix_pre_fr_ctr = 0;
 test_stim_tr_idx = 0;
 
+if profile_memory
+    mem_used = nan(1,n_trs_tot);
+    avail_sys_mem = nan(1,n_trs_tot);
+    avail_phys_mem = nan(1,n_trs_tot);
+end
+
 % start the stimulus loop
 for i = 1:n_trs_tot
     
@@ -703,6 +741,7 @@ for i = 1:n_trs_tot
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
+        curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:); 
         test_stim_tr_idx = test_stim_tr_idx + 1;
     else
         % put stim rect around center
@@ -710,6 +749,7 @@ for i = 1:n_trs_tot
         ycurr = y_cent;
         stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], xcurr, ycurr);
         curr_bb = stim_rect;
+        curr_bb_stim_pre_dot = stim_rect;
     end
     
     drawInfoText();
@@ -747,7 +787,7 @@ for i = 1:n_trs_tot
             %for j = 1:stimulus_pre_frames
             idx_all = idx_all +1;
             drawInfoText();
-            drawBoundingBoxes();
+            drawBoundingBoxes(curr_bb_stim_pre_dot);
             if seqidx ~= 0
                 if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
                 Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
@@ -765,7 +805,7 @@ for i = 1:n_trs_tot
             end
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
-            curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
+            curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb_stim_pre_dot);
             
             pre_stim_timer = GetSecs() - stps;
             [~,~,kCode] = KbCheck(0);
@@ -836,6 +876,8 @@ for i = 1:n_trs_tot
     inter_rsvp_fr_ctr = 1;
     pulse_t_idx = 0; % for size-pulsed imaged
     stim_trig_hi = 0;
+    tex1 = [];
+    tex2 = [];
     
     % ENTER STIMULUS
     while ~end_stim && ~exit_flag % loops for every frame
@@ -1082,6 +1124,22 @@ for i = 1:n_trs_tot
                 end
             end
             
+            if photodiode_flash && ~inter_rsvp
+                if rsvp_mode
+                    whichflash = mod(rsvpfridx, 2);
+                else
+                    whichflash = mod(stfridx, 2);
+                end
+                
+                if whichflash
+                    Screen('FillRect', win, blackcol, flash_rect);
+                    Screen('FillRect', win_ctrl, blackcol, flash_rect);
+                else
+                    Screen('FillRect', win, whitecol, flash_rect);
+                    Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                end
+            end
+            
             vbl = Screen('Flip', win, vbl + halfifi);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
             if trig_flag && ~stim_trig_hi && ~inter_rsvp
@@ -1094,9 +1152,15 @@ for i = 1:n_trs_tot
                 stim_trig_hi = 0;
             end
             
-            if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
+            %if strcmp(stim_mode, 'movie')
+            %    Screen('Close', movtex);
+            %end
+            %if (strcmp(stim_mode, 'images') || seqidx == 0) && ~inter_rsvp
+            if ~isempty(tex1)    %tex1 
                 Screen('Close', tex1);
-                if ctrl_screen; Screen('Close', tex2); end
+                Screen('Close', tex2);
+                tex1 = []; 
+                tex2 = []; 
             end
         end
         
@@ -1162,15 +1226,13 @@ for i = 1:n_trs_tot
         if end_stim
             calib_end_t(i) = GetSecs()-t_start_sec;
             if trig_flag
-                disp('stim trig off');
+                %disp('stim trig off');
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0;
             end
         end
         
         if end_stim
-            % sca
-            % keyboard
             Screen('FillRect', win, bg_col_val);
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
@@ -1277,17 +1339,9 @@ for i = 1:n_trs_tot
                     vbl = Screen('Flip', win, vbl + halfifi);
                     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl + halfifi); end
                 end
-                %fprintf('Punish off\n');
             end
         end
     end
-    
-    %     if strcmp(stim_mode, 'images') && ~rsvp_mode
-    %         img_idx = img_idx + 1;
-    %         if img_idx > nr_imgs
-    %             img_idx = 1;
-    %         end
-    %     end
     
     if seqidx == 0
         wu_img_idx = wu_img_idx +1;
@@ -1300,11 +1354,13 @@ for i = 1:n_trs_tot
         break
     end
     
+    if profile_memory
+        [u,m] = memory;
+        mem_used(i) = u.MemUsedMATLAB;
+        avail_sys_mem(i) = m.PhysicalMemory.Available;
+        avail_phys_mem(i) = m.SystemMemory.Available;
+    end
 end
-
-
-%sca
-%keyboard
 
 Screen('FillRect', win, bg_col_val);
 if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
@@ -1325,6 +1381,13 @@ if trig_flag
     % ensure everything else is off
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+end
+
+
+if profile_memory 
+    assignin('base', 'mem_used', mem_used); 
+    assignin('base', 'avail_sys_mem', avail_sys_mem); 
+    assignin('base', 'avail_phys_mem', avail_phys_mem); 
 end
 
 %% gather data for save
@@ -1384,6 +1447,8 @@ end
 
 calib_settings.bounding_box_x = unique(bounding_rects(:,3)-bounding_rects(:,1));
 calib_settings.bounding_box_y =unique(bounding_rects(:,4)-bounding_rects(:,2));
+calib_settings.bounding_box_x_stim_pre_dot = unique(bounding_rects_stim_pre_dot(:,3)-bounding_rects_stim_pre_dot(:,1));
+calib_settings.bounding_box_y_stim_pre_dot =unique(bounding_rects_stim_pre_dot(:,4)-bounding_rects_stim_pre_dot(:,2));
 calib_settings.draw_gaze_pt = draw_gaze_pt;
 calib_settings.n_gaze_pts_draw = n_gaze_pts_draw;
 calib_settings.gaze_pt_dot_col = gaze_pt_dot_col;
@@ -1522,20 +1587,23 @@ end
         
         if apply_calib
             if ~isempty(cProj)
-                cProj
                 raw_eye = [eyepos_x_tmp,eyepos_y_tmp];
                 T = [cX,cY,cProj];
                 transformed_eye = homography_transform(raw_eye,T);
                 eyepos_x(idx_all) = transformed_eye(:,1);
                 eyepos_y(idx_all) = transformed_eye(:,2);
             else
-                if length(cX) == 3
+                if length(cX) == 4
+                    eyepos_x(idx_all) = eyepos_x_tmp * cX(2) + eyepos_y_tmp * cX(3) + eyepos_x_tmp.*eyepos_y_tmp * cX(4) + cX(1); 
+                elseif length(cX) == 3
                     eyepos_x(idx_all) = eyepos_x_tmp*cX(2) + eyepos_y_tmp*cX(3) + cX(1);
                 elseif length(cX) == 2
                     eyepos_x(idx_all) = eyepos_x_tmp*cX(2) + cX(1);
                 end
                 
-                if length(cY) == 3
+                if length(cY) ==4
+                     eyepos_y(idx_all) = eyepos_y_tmp * cY(2) + eyepos_x_tmp * cY(3) + eyepos_x_tmp.*eyepos_y_tmp * cY(4) + cY(1); 
+                elseif length(cY) == 3
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + eyepos_x_tmp*cY(3) + cY(1);
                 elseif length(cY) == 2
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + cY(1);
@@ -1606,13 +1674,17 @@ end
             end
             
             Screen('DrawText', win_ctrl, sprintf('Calibration loaded: %d', apply_calib), 80, win_rect(4)+160, textcol);
-            if length(cX) == 3
+            if length(cX) ==4
+                Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f %0.1f', cX(1), cX(2), cX(3),cX(4)), 80, win_rect(4)+180, textcol);
+            elseif length(cX) == 3
                 Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f', cX(1), cX(2), cX(3)), 80, win_rect(4)+180, textcol);
             elseif length(cX) == 2
                 Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f', cX(1), cX(2)), 80, win_rect(4)+180, textcol);
             end
             
-            if length(cY) ==3
+            if length(cY) ==4
+                Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f %0.1f', cY(1), cY(2), cY(3),cY(4)), 80, win_rect(4)+200, textcol);
+            elseif length(cY) ==3
                 Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f', cY(1), cY(2), cY(3)), 80, win_rect(4)+200, textcol);
             elseif length(cY) == 2
                 Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f', cY(1), cY(2)), 80, win_rect(4)+200, textcol);
@@ -1636,22 +1708,27 @@ end
             Screen('DrawText', win_ctrl, sprintf('Pre-stim time in box: %dms\n', round(fix_pre_fr_ctr*ifi*1e3)), 800, win_rect(4)+80, textcol);
             Screen('DrawText', win_ctrl, sprintf('Time pre-stim total: %dms\n', round(pre_stim_timer*1e3)), 800, win_rect(4)+105, textcol);
             
+            
+            
             Screen('DrawText', win_ctrl, sprintf('Subject: %s, Session: %s', subject, session_time), 740, win_rect(4)+280);
         end
     end
 
-    function drawBoundingBoxes()
-        if ctrl_screen
-            if show_curr_bounding_box
-                if seqidx ~= 0
-                    Screen('FrameRect', win_ctrl, cols(seqidx+1,:), curr_bb, 5);
-                else
-                    Screen('FrameRect', win_ctrl, whitecol, curr_bb, 5);
-                end
+    function drawBoundingBoxes(curr_bb_stim_pre_dot)
+        if show_curr_bounding_box
+            if nargin>0 && seqidx ~= 0
+                Screen('FrameRect',win_ctrl,cols(seqidx+1,:), curr_bb_stim_pre_dot,5);
+            elseif nargin>0 && seqidx == 0
+                Screen('FrameRect',win_ctrl,whitecol,curr_bb_stim_pre_dot,5);
+            elseif nargin ==0 && seqidx ~= 0
+                Screen('FrameRect', win_ctrl, cols(seqidx+1,:), curr_bb, 5);
+            else nargin == 0 && seqidx == 0
+                Screen('FrameRect', win_ctrl, whitecol, curr_bb, 5);
             end
-            if show_all_bounding_boxes && seqidx ~= 0
-                Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects', 1);
-            end
+        end
+        if show_all_bounding_boxes && seqidx ~= 0
+            Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects', 1);
+            Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot',1);
         end
     end
 

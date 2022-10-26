@@ -1069,6 +1069,7 @@ reward_today = str2double(char(regexp(get(reward_today_txt_hand, 'String'), '\d*
     
 function cleanUpFun(hObject, eventdata, handles)
 
+try 
 h = guidata(hObject); 
 if ~isempty(h.subject_file)
     reward_today = getRewardTodayFromTxt(h.reward_today_txt); 
@@ -1094,6 +1095,8 @@ if h.trig_arduino_connected
     disp('Trigger arduino disconnected');
 end
 
+catch me
+end
 delete(hObject);
 
 

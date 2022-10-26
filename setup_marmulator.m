@@ -12,7 +12,7 @@ arduino_lickometer_comport = '';
 arduino_triggers_comport = ''; 
 
 default_gaze_center_adjust = [0, 210]; % [x, y]
-default_gaze_center_adjust = [-20,90]; %2022-10-24
+default_gaze_center_adjust = [0,116]; %2022-10-25 yj
 
 screenid_stim = 1; 
 screenid_ctrl = 2; 
