@@ -343,7 +343,7 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
         im_wd(i) = size(imgs{i}, 2);
         ar(i) = im_wd(i)/im_ht(i);
     end
-    nr_imgs = numel(imgs);
+    n_imgs = numel(imgs);
 end
 
 
@@ -351,7 +351,6 @@ end
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
-%keyboard
 Screen('Preference', 'SkipSyncTests', 0)
 Screen('Preference', 'VisualDebugLevel', 0)
 
@@ -557,7 +556,7 @@ else
 end
 
 
-n_trs_tot = n_calib_pts*trs_per_location;
+n_trs_requested = n_calib_pts*trs_per_location;
 
 
 tr_seq = []; % trial sequence - note that this determines the position of stimuli only.
@@ -571,13 +570,13 @@ else
 end
 
 if wake_up_trials
-    y = nan(1,n_trs_tot);
+    y = nan(1,n_trs_requested);
     z = [tr_seq; y];
-    n_wake_up_trs = ceil(n_trs_tot/mean(wake_up_every))+1;
+    n_wake_up_trs = ceil(n_trs_requested/mean(wake_up_every))+1;
     wue = wake_up_every -1;
     insert_every = round(rand(1,n_wake_up_trs)*diff(wue)+wue(1));
     insert_idx = cumsum(insert_every);
-    insert_idx = insert_idx(insert_idx<=n_trs_tot);
+    insert_idx = insert_idx(insert_idx<=n_trs_requested);
     z(2,insert_idx) = 0;
     z = z(~isnan(z))';
     tr_seq = z;
@@ -596,35 +595,49 @@ if wake_up_trials
         end
         wake_up_imgs{i} = wu_img_tmp;
     end
-    nr_wu_imgs = numel(wake_up_imgs);
+    n_wu_imgs = numel(wake_up_imgs);
     wu_img_idx = 1;
 else
     n_wake_up_trs = 0;
+    n_trs_tot = n_trs_requested; 
 end
-
 
 % set up img sequence
 if strcmp(stim_mode, 'images')
-    n_rsvps = n_trs_tot*n_rsvp;
-    x = floor(n_rsvps/nr_imgs);
-    img_seq = [repmat(1:nr_imgs, 1, x) 1:mod(n_rsvps, x*nr_imgs)];
+    n_rsvps = n_trs_requested*n_rsvp;
+    x = floor(n_rsvps/n_imgs);
     if strcmp(image_order, 'random')
-        img_seq =  img_seq(randperm(numel(img_seq)));
+        if x>0
+            img_seq = [];
+            for q = 1:x
+                img_seq = [img_seq randperm(n_imgs)];
+            end
+            img_seq = [img_seq randperm(n_imgs, mod(n_rsvps, n_imgs))];
+        else
+            img_seq = randperm(n_imgs, n_rsvps);
+        end
+    else
+        img_seq = [repmat(1:n_imgs, 1, x) 1:mod(n_rsvps, x*n_imgs)];
     end
-    img_seq = reshape(img_seq, [n_rsvp, n_trs_tot]);
+    img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
+    
+    if wake_up_trials % insert wake up trials as n_rsvp x 1 zeros matrices in appropriate position
+        wu_tr_idx = find(tr_seq == 0);
+        for i = 1:numel(wu_tr_idx)
+            wu_tr_idx_curr = wu_tr_idx(i);
+            img_seq = [img_seq(:,1:wu_tr_idx_curr-1) zeros(n_rsvp, 1) img_seq(:,wu_tr_idx_curr:end)];
+        end
+    end
     image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
 else
     img_seq = [];
     image_displayed = [];
 end
-
+wake_up_image_displayed = cell(1, n_trs_tot);
 
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
 end
-
-
-wake_up_image_displayed = cell(1, n_trs_tot);
 
 % calculate frames per stim, iti
 stim_frames = round(presentation_time/1e3/ifi);
@@ -710,7 +723,7 @@ man_reward_ct = 0;
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
-test_stim_tr_idx = 0;
+%test_stim_tr_idx = 0;
 
 if profile_memory
     mem_used = nan(1,n_trs_tot);
@@ -744,7 +757,7 @@ for i = 1:n_trs_tot
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
         curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:); 
-        test_stim_tr_idx = test_stim_tr_idx + 1;
+       % test_stim_tr_idx = test_stim_tr_idx + 1;
     else
         % put stim rect around center
         xcurr = x_cent;
@@ -893,7 +906,7 @@ for i = 1:n_trs_tot
         end
         %rsvpfridx
         if strcmp(stim_mode, 'images')
-            img_idx = img_seq(rsvp_ctr, test_stim_tr_idx);
+            img_idx = img_seq(rsvp_ctr, i);
         end
         stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
@@ -1341,7 +1354,7 @@ for i = 1:n_trs_tot
     
     if seqidx == 0
         wu_img_idx = wu_img_idx +1;
-        if wu_img_idx > nr_wu_imgs
+        if wu_img_idx > n_wu_imgs
             wu_img_idx = 1;
         end
     end
@@ -1500,7 +1513,7 @@ settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
 
 reward.give_rewards = true;
-reward.nr_rewards_given = sum(reward_trial);
+reward.n_rewards_given = sum(reward_trial);
 reward.reward_sequence = reward_trial;
 reward.reward_vol = reward_vol;
 reward.arduino_pin_reward = reward_arduino_pin;
@@ -1514,7 +1527,7 @@ reward.manual_reward_t = manual_reward_t;
 reward.man_reward_ct = man_reward_ct;
 
 punish.give_punishments = give_punishments;
-punish.nr_puns_given = sum(punish_trial);
+punish.n_puns_given = sum(punish_trial);
 punish.pun_sequence = punish_trial;
 punish.length_ms = punish_length_ms;
 punish.play_sound = play_punish_sound;
