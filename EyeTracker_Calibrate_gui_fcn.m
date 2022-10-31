@@ -723,7 +723,6 @@ man_reward_ct = 0;
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
-%test_stim_tr_idx = 0;
 
 if profile_memory
     mem_used = nan(1,n_trs_tot);
@@ -757,7 +756,6 @@ for i = 1:n_trs_tot
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
         curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:); 
-       % test_stim_tr_idx = test_stim_tr_idx + 1;
     else
         % put stim rect around center
         xcurr = x_cent;
