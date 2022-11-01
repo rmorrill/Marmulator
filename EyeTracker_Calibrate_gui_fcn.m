@@ -351,7 +351,7 @@ end
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
-Screen('Preference', 'SkipSyncTests', 0)
+Screen('Preference', 'SkipSyncTests', 1)
 Screen('Preference', 'VisualDebugLevel', 0)
 
 %screenid_stim = max(Screen('Screens'));
@@ -1040,7 +1040,7 @@ for i = 1:n_trs_tot
                         %                         end
                         %mov_dur(end+1) = GetSecs()-t_mov_start;
                     case 'movie'
-                        t_mov_start = GetSfecs();
+                        t_mov_start = GetSecs();
                         waitforimage = 0;
                         %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
                         movtex_new = Screen('GetMovieImage', win, moviePtr, waitforimage);
