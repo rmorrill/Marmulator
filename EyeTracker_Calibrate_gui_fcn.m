@@ -173,6 +173,18 @@ else
     stimulus_pre_dot_disappear = 0;
 end
 
+if isfield(s,'wake_up_reward')
+    wake_up_reward = s.wake_up_reward;
+else
+    wake_up_reward = true; 
+end
+
+if isfield(s,'stimulus_pre_dot_stay_iti_rsvp')
+    stimulus_pre_dot_stay_iti_rsvp = s.stimulus_pre_dot_stay_iti_rsvp;
+else
+    stimulus_pre_dot_stay_iti_rsvp = false
+end
+
 %% rsvp setup
 % rsvp will use presentation time for each stimulus duration
 if isfield(s, 'rsvp_iti_t')
@@ -351,7 +363,7 @@ end
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
-Screen('Preference', 'SkipSyncTests', 1)
+Screen('Preference', 'SkipSyncTests', 0)
 Screen('Preference', 'VisualDebugLevel', 0)
 
 %screenid_stim = max(Screen('Screens'));
@@ -926,8 +938,6 @@ for i = 1:n_trs_tot
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
             
-            
-            
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
             eye_in_bb_curr(stfridx) = curr_in_bb;
             
@@ -1095,6 +1105,12 @@ for i = 1:n_trs_tot
                 %keyboard
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                         dotsz, rgba_cols(:,end), [], 1); end
+                
+                if stimulus_pre_dot_stay_iti_rsvp
+                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
+                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                end
+                
                 inter_rsvp_fr_ctr = inter_rsvp_fr_ctr + 1;
                 %inter_rsvp_fr_ctr
             end
@@ -1274,6 +1290,10 @@ for i = 1:n_trs_tot
                         reward_this_trial = false;
                     end
                     
+                    if seqidx == 0 && ~wake_up_reward
+                        reward_this_trial = false;
+                    end
+                    
                 elseif strcmp(trial_mode, 'foraging')
                     if rsvp_mode
                         if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
@@ -1329,7 +1349,7 @@ for i = 1:n_trs_tot
                 end
             end
             
-            if give_punishments && (give_rewards && ~reward_this_trial)
+            if give_punishments && (give_rewards && ~reward_this_trial) && seqidx ~= 0
                 punish_trial(i) = true;
                 %fprintf('Punish on\n');
                 if play_punish_sound
@@ -1588,6 +1608,7 @@ end
             case 'mouse'
                 [eyepos_x_tmp, eyepos_y_tmp] = GetMouse();
                 eye_data_qual = NaN;
+                eye_data_qual = 1;
         end
         eyetracker_qual(idx_all) = eye_data_qual;
         
