@@ -5,11 +5,17 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
     trigger_arduino, setup_config)
-
-
+%keyboard
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
+
+lick_flag = true;
+lick_rect = [1490, 890, 1530, 930];
+rew_trs_since_lick = NaN; 
+stop_rewards_n_nolicks = 4; 
+lick_times_all = nan(1,1e5); 
+lick_idx = 0; 
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -50,6 +56,8 @@ if ~isempty(trigger_arduino)
     trig_hand = trigger_arduino.ahand;
     trig_flag = true;
     [sess_trig_cmd, trial_trig_cmd, stim_trig_cmd] = gen_trig_commands(trigger_arduino);
+    Alphabet = 'abcdefghijklmnopqrstuvwxyz';
+    read_lick_cmd = ['1' Alphabet(trigger_arduino.lick_pin + 1)];
     % ensure that everything is off
     % turn off session trigger
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
@@ -62,8 +70,6 @@ else
     trig_flag = false;
 end
 
-%sca
-%keyboard
 PsychJavaSwingCleanup;
 
 %% SETTINGS:
@@ -98,20 +104,20 @@ show_all_bounding_boxes = s.show_all_bounding_boxes;
 bounding_rect_size_x = s.bounding_rect_size_x;
 bounding_rect_size_y = s.bounding_rect_size_y;
 manual_bounding_boxes = s.manual_bounding_boxes;
-if isfield(s,'bounding_rect_size_stim_pre_dot_x') && ~isempty(s.bounding_rect_size_stim_pre_dot_x) 
+if isfield(s,'bounding_rect_size_stim_pre_dot_x') && ~isempty(s.bounding_rect_size_stim_pre_dot_x)
     bounding_rect_size_stim_pre_dot_x = s.bounding_rect_size_stim_pre_dot_x;
 else
     bounding_rect_size_stim_pre_dot_x = bounding_rect_size_x;
 end
-if isfield(s,'bounding_rect_size_stim_pre_dot_y') && ~isempty(s.bounding_rect_size_stim_pre_dot_y) 
+if isfield(s,'bounding_rect_size_stim_pre_dot_y') && ~isempty(s.bounding_rect_size_stim_pre_dot_y)
     bounding_rect_size_stim_pre_dot_y = s.bounding_rect_size_stim_pre_dot_y;
 else
-    bounding_rect_size_stim_pre_dot_y = bounding_rect_size_y; 
+    bounding_rect_size_stim_pre_dot_y = bounding_rect_size_y;
 end
 if isfield(s,'manual_bounding_boxes stim_pre_dot') && ~isempty(s.manual_bounding_boxes_stim_pre_dot)
     manual_bounding_boxes_stim_pre_dot = s.manual_bounding_boxes_stim_pre_dot;
 else
-    manual_bounding_boxes_stim_pre_dot = manual_bounding_boxes; 
+    manual_bounding_boxes_stim_pre_dot = manual_bounding_boxes;
 end
 trial_mode = s.trial_mode;
 reward_on = s.reward_on;
@@ -171,6 +177,12 @@ if isfield(s,'stimulus_pre_dot_disappear')
     stimulus_pre_dot_disappear = s.stimulus_pre_dot_disappear; % if 1, disappear when stimulus is presented
 else
     stimulus_pre_dot_disappear = 0;
+end
+
+if give_punishments
+    punish_length_ms_draw = punish_length_ms;
+else
+    punish_length_ms_draw = NaN;
 end
 
 %% rsvp setup
@@ -353,6 +365,7 @@ Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
 Screen('Preference', 'SkipSyncTests', 0)
 Screen('Preference', 'VisualDebugLevel', 0)
+Screen('Preference', 'TextRenderer', 0);
 
 %screenid_stim = max(Screen('Screens'));
 %screenid_ctrl = max(Screen('Screens'))-1;
@@ -389,7 +402,7 @@ end
 [x_cent, y_cent] = RectCenter(win_rect);
 if photodiode_flash
     flash_rect = [win_rect(3)-flash_rect_size(1), win_rect(4)-flash_rect_size(2),...
-        win_rect(3), win_rect(4)]; 
+        win_rect(3), win_rect(4)];
 end
 
 
@@ -599,7 +612,7 @@ if wake_up_trials
     wu_img_idx = 1;
 else
     n_wake_up_trs = 0;
-    n_trs_tot = n_trs_requested; 
+    n_trs_tot = n_trs_requested;
 end
 
 % set up img sequence
@@ -635,6 +648,10 @@ else
 end
 wake_up_image_displayed = cell(1, n_trs_tot);
 
+if lick_flag
+    lick_trs = false(1,n_trs_tot); 
+end
+
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
 end
@@ -648,8 +665,6 @@ if strcmp(trial_mode, 'trial')
 elseif strcmp(trial_mode, 'foraging')
     t_sin = 0:ifi:(time_out_after+time_to_reward/1e3);
 end
-%sca
-%keyboard
 
 % set up audio feedback
 if play_reward_sound
@@ -668,6 +683,7 @@ else
 end
 
 stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi);
+wait_after_rew_frames = round(wait_after_reward/1e3/ifi);
 
 Screen('FillRect', win, bg_col_val)
 %tex1 = Screen('MakeTexture', win, img);
@@ -742,20 +758,13 @@ for i = 1:n_trs_tot
     manual_reward_flag = false;
     entered_bb = false; % did eye go into bb?
     
-    Screen('FillRect', win, bg_col_val)
-    vbl = Screen('Flip', win);
-    
-    if ctrl_screen
-        Screen('FillRect', win_ctrl, bg_col_val)
-        vbl2 = Screen('Flip', win_ctrl);
-    end
     
     if seqidx ~= 0
         xcurr = all_pts(seqidx,1);
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
-        curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:); 
+        curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:);
     else
         % put stim rect around center
         xcurr = x_cent;
@@ -765,23 +774,55 @@ for i = 1:n_trs_tot
         curr_bb_stim_pre_dot = stim_rect;
     end
     
+    idx_all = idx_all +1;
+    
+    
     drawInfoText();
     drawBoundingBoxes();
     if draw_retain_bb_pts
         drawGoodEyePts(0);
     end
+    get_eyetracker_draw_dots();
+    if lick_flag 
+        lick = checkLick(); 
+        if lick
+           lick_trs(i) = true; 
+        end
+    end
+    
+    Screen('FillRect', win, bg_col_val)
+    vbl = Screen('Flip', win);
+    
+    if ctrl_screen
+        Screen('FillRect', win_ctrl, bg_col_val)
+        vbl2 = Screen('Flip', win_ctrl);
+    end
+    
+    %%%% gratuitous? - RJM
+%     drawInfoText();
+%     drawBoundingBoxes();
+%     if draw_retain_bb_pts
+%         drawGoodEyePts(0);
+%     end
+%     if lick_flag; lick = checkLick(); end
     
     for j = 1:iti_frames(i)
         idx_all = idx_all +1;
         drawInfoText();
+
         drawBoundingBoxes();
         if draw_retain_bb_pts
             drawGoodEyePts(0);
         end
+        if lick_flag
+            lick = checkLick();
+            if lick
+                lick_trs(i) = true;
+            end
+        end
         vbl = Screen('Flip', win, vbl + halfifi);
         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
         get_eyetracker_draw_dots();
-        
     end
     
     end_stim_pre = 0;
@@ -801,6 +842,13 @@ for i = 1:n_trs_tot
             idx_all = idx_all +1;
             drawInfoText();
             drawBoundingBoxes(curr_bb_stim_pre_dot);
+            if lick_flag
+                lick = checkLick();
+                if lick
+                    lick_trs(i) = true;
+                end
+            end
+            
             if seqidx ~= 0
                 if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
                 Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
@@ -894,13 +942,14 @@ for i = 1:n_trs_tot
     
     % ENTER STIMULUS
     while ~end_stim && ~exit_flag % loops for every frame
+        %t1_frame = GetSecs(); 
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
             % go into a break
             inter_rsvp = true;
         else
             inter_rsvp = false;
             rsvpfridx = rsvpfridx + 1;
-           %rsvpfridx
+            %rsvpfridx
         end
         %rsvpfridx
         if strcmp(stim_mode, 'images')
@@ -925,7 +974,6 @@ for i = 1:n_trs_tot
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
-            
             
             
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
@@ -1040,7 +1088,7 @@ for i = 1:n_trs_tot
                         %                         end
                         %mov_dur(end+1) = GetSecs()-t_mov_start;
                     case 'movie'
-                        t_mov_start = GetSfecs();
+                        t_mov_start = GetSecs();
                         waitforimage = 0;
                         %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
                         movtex_new = Screen('GetMovieImage', win, moviePtr, waitforimage);
@@ -1083,10 +1131,10 @@ for i = 1:n_trs_tot
                 
                 % stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                 tex1 = Screen('MakeTexture', win, wake_up_imgs{wu_img_idx});
-                Screen('DrawTexture', win, tex1, [], stim_rect)
+                Screen('DrawTexture', win, tex1, [], stim_rect);
                 
                 if ctrl_screen; tex2 = Screen('MakeTexture', win_ctrl, wake_up_imgs{wu_img_idx});
-                    Screen('DrawTexture', win_ctrl, tex2, [], stim_rect)
+                    Screen('DrawTexture', win_ctrl, tex2, [], stim_rect);
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                         dotsz, rgba_cols(:,end), [], 1);
                 end
@@ -1099,6 +1147,13 @@ for i = 1:n_trs_tot
                 %inter_rsvp_fr_ctr
             end
             
+            
+            if lick_flag
+                lick = checkLick();
+                if lick
+                    lick_trs(i) = true;
+                end
+            end
             
             if strcmp(reward_on, 'location')
                 %disp(loop_brk_ctr)
@@ -1155,8 +1210,13 @@ for i = 1:n_trs_tot
                 end
             end
             
+            %t2_frame = GetSecs(); 
+            %%%%% STIMULUS FRAME FLIP
             vbl = Screen('Flip', win, vbl + halfifi);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
+            %t_dur(stfridx) = t1_frame - t2_frame; 
+            
+            
             if trig_flag && ~stim_trig_hi && ~inter_rsvp
                 %disp('stim trig on');
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
@@ -1167,11 +1227,11 @@ for i = 1:n_trs_tot
                 stim_trig_hi = 0;
             end
             
-            if ~isempty(tex1)    %tex1 
+            if ~isempty(tex1)    %tex1
                 Screen('Close', tex1);
                 Screen('Close', tex2);
-                tex1 = []; 
-                tex2 = []; 
+                tex1 = [];
+                tex2 = [];
             end
         end
         
@@ -1182,9 +1242,8 @@ for i = 1:n_trs_tot
         if rsvp_mode && rsvpfridx >= stim_frames
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
-            rsvpfridx_old = rsvpfridx; 
+            rsvpfridx_old = rsvpfridx;
             rsvpfridx = 0;
-            
         end
         
         % check if we need to end
@@ -1235,6 +1294,8 @@ for i = 1:n_trs_tot
         end
         
         if end_stim
+
+            
             Screen('FillRect', win, bg_col_val);
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
@@ -1250,7 +1311,7 @@ for i = 1:n_trs_tot
             vbl = Screen('Flip', win, vbl + halfifi);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
             
-           % if ending, note the time:
+            % if ending, note the time:
             calib_end_t(i) = GetSecs()-t_start_sec;
             if trig_flag
                 %disp('stim trig off');
@@ -1297,6 +1358,18 @@ for i = 1:n_trs_tot
                 
                 if reward_this_trial
                     reward_trial(i) = true;
+                    
+                    if lick_flag
+                        %%% check trials since last lick
+                        if lick_trs(i)
+                            rew_trs_since_lick = 0;
+                        elseif i == 1 && ~lick_trs(i)
+                            rew_trs_since_lick = 1; 
+                        else
+                            rew_trs_since_lick = rew_trs_since_lick + 1; 
+                        end
+                    end
+                    
                     if ~manual_reward_flag
                         reward_ct = reward_ct + 1;
                     end
@@ -1307,23 +1380,26 @@ for i = 1:n_trs_tot
                         disp('sound played');
                     end
                     if ~isempty(reward_pumphand)
-                        reward_time(i) = GetSecs()-t_start_sec;
-                        if reward_serial
-                            writeline(reward_pumphand, 'RUN');
-                            WaitSecs(reward_on_dur);
-                        else
-                            reward_pumphand.digitalWrite(reward_arduino_pin, 1);
-                            WaitSecs(reward_on_dur);
-                            reward_pumphand.digitalWrite(10, 0);
+                        
+                        if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
+                            reward_time(i) = GetSecs()-t_start_sec;
+                            if reward_serial
+                                writeline(reward_pumphand, 'RUN');
+                                %WaitSecs(reward_on_dur);
+                            else
+                                reward_pumphand.digitalWrite(reward_arduino_pin, 1);
+                                WaitSecs(reward_on_dur);
+                                reward_pumphand.digitalWrite(10, 0);
+                            end
+                            set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
+                            drawnow;
+                        elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
+                            fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick); 
                         end
-                        set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
-                        drawnow;
+                        
                         WaitSecs(wait_after_reward);
                         
                     end
-                    
-                    %WaitSecs(1);
-                    
                 else
                     fprintf('no reward: trial %d\n', i);
                 end
@@ -1340,6 +1416,7 @@ for i = 1:n_trs_tot
                     if ctrl_screen; Screen('FillRect', win_ctrl, blackcol); end
                     drawInfoText(1);
                     drawBoundingBoxes();
+                    lick = checkLick();
                     if draw_retain_bb_pts
                         drawGoodEyePts(0);
                     end
@@ -1390,10 +1467,10 @@ if trig_flag
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
 end
 
-if profile_memory 
-    assignin('base', 'mem_used', mem_used); 
-    assignin('base', 'avail_sys_mem', avail_sys_mem); 
-    assignin('base', 'avail_phys_mem', avail_phys_mem); 
+if profile_memory
+    assignin('base', 'mem_used', mem_used);
+    assignin('base', 'avail_sys_mem', avail_sys_mem);
+    assignin('base', 'avail_phys_mem', avail_phys_mem);
 end
 
 %% gather data for save
@@ -1557,8 +1634,6 @@ if contains(calib_settings.expt_params,'center_point')
     get_mean_x_y_pts(fullfile(save_data_dir, savefname))
 end
 
-
-
 %%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
     function [eyeposx_cur, eyeposy_cur, eye_data_qual] = get_eyetracker_draw_dots()
         %[eyepos_x(idx_all), eyepos_y(idx_all)] = vpx_GetGazePointCorrected(eye);
@@ -1600,7 +1675,7 @@ end
                 eyepos_y(idx_all) = transformed_eye(:,2);
             else
                 if length(cX) == 4
-                    eyepos_x(idx_all) = eyepos_x_tmp * cX(2) + eyepos_y_tmp * cX(3) + eyepos_x_tmp.*eyepos_y_tmp * cX(4) + cX(1); 
+                    eyepos_x(idx_all) = eyepos_x_tmp * cX(2) + eyepos_y_tmp * cX(3) + eyepos_x_tmp.*eyepos_y_tmp * cX(4) + cX(1);
                 elseif length(cX) == 3
                     eyepos_x(idx_all) = eyepos_x_tmp*cX(2) + eyepos_y_tmp*cX(3) + cX(1);
                 elseif length(cX) == 2
@@ -1608,7 +1683,7 @@ end
                 end
                 
                 if length(cY) ==4
-                     eyepos_y(idx_all) = eyepos_y_tmp * cY(2) + eyepos_x_tmp * cY(3) + eyepos_x_tmp.*eyepos_y_tmp * cY(4) + cY(1); 
+                    eyepos_y(idx_all) = eyepos_y_tmp * cY(2) + eyepos_x_tmp * cY(3) + eyepos_x_tmp.*eyepos_y_tmp * cY(4) + cY(1);
                 elseif length(cY) == 3
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + eyepos_x_tmp*cY(3) + cY(1);
                 elseif length(cY) == 2
@@ -1647,11 +1722,9 @@ end
         if draw_gaze_pt && ctrl_screen
             Screen('DrawDots', win_ctrl, draw_coords,...
                 dotsz, rgba_cols(:,(end-min(idx_all, n_gaze_pts_draw)+1):end), [], 1);
-            % fprintf('%d, %d\n', eyepos_x_tmp, eyepos_y_tmp);
         end
         eyeposx_cur = draw_coords(1,end);
         eyeposy_cur = draw_coords(2,end);
-        %fprintf('eyepos pix: %0.1f %0.1f\n',  eyeposx_cur, eyeposy_cur);
     end
 
     function drawInfoText(duringPun)
@@ -1666,57 +1739,45 @@ end
                 textcol = [0 0 0];
             end
             
-            Screen('DrawText', win_ctrl, sprintf('mode: %s, %s; tr %d of %d, tr time: %dms', stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3)), 80, win_rect(4)+30, textcol);
-            Screen('DrawText', win_ctrl, sprintf('%d auto reward, %d manual (reward on %s)', reward_ct, man_reward_ct, reward_on), 80, win_rect(4)+55, textcol);
-            Screen('DrawText', win_ctrl, sprintf('eyetracking: %s', eye_method), 80, win_rect(4)+80, textcol);
-            Screen('FrameRect', win_ctrl, [0 0 0], win_rect, 1);
-            Screen('DrawText', win_ctrl, sprintf('display screen'), mean([win_rect(1), win_rect(3)])-70, win_rect(4), textcol);
-            
             if strcmp(trial_mode, 'foraging')
-                Screen('DrawText', win_ctrl, sprintf('foraging: time out %dms, reward %dms', time_out_after, time_to_reward), ...
-                    80, win_rect(4)+105, textcol);
-                Screen('DrawText', win_ctrl, sprintf('correct time: %dms', round(loop_brk_ctr*ifi *1e3)), ...
-                    80, win_rect(4) + 130, textcol);
-            end
-            
-            Screen('DrawText', win_ctrl, sprintf('Calibration loaded: %d', apply_calib), 80, win_rect(4)+160, textcol);
-            if length(cX) ==4
-                Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f %0.1f', cX(1), cX(2), cX(3),cX(4)), 80, win_rect(4)+180, textcol);
-            elseif length(cX) == 3
-                Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f, %0.1f', cX(1), cX(2), cX(3)), 80, win_rect(4)+180, textcol);
-            elseif length(cX) == 2
-                Screen('DrawText', win_ctrl, sprintf('calib x: %0.1f, %0.1f', cX(1), cX(2)), 80, win_rect(4)+180, textcol);
-            end
-            
-            if length(cY) ==4
-                Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f %0.1f', cY(1), cY(2), cY(3),cY(4)), 80, win_rect(4)+200, textcol);
-            elseif length(cY) ==3
-                Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f, %0.1f', cY(1), cY(2), cY(3)), 80, win_rect(4)+200, textcol);
-            elseif length(cY) == 2
-                Screen('DrawText', win_ctrl, sprintf('calib y: %0.1f, %0.1f', cY(1), cY(2)), 80, win_rect(4)+200, textcol);
-            end
-            
-            if ~isempty(cProj)
-                Screen('DrawText', win_ctrl, sprintf('calib proj: %0.1f, %0.1f', cProj(1), cProj(2)), 80, win_rect(4)+220, textcol);
-            end
-            
-            Screen('DrawText', win_ctrl, sprintf('gaze offset x: %0.3f', gaze_offset_x), 580, win_rect(4)+180, textcol);
-            Screen('DrawText', win_ctrl, sprintf('gaze offset y: %0.3f', gaze_offset_y), 580, win_rect(4)+200, textcol);
-            
-            if give_punishments
-                Screen('DrawText', win_ctrl, sprintf('give time-out punish: %d, dur: %dms, nr punish: %d', give_punishments, punish_length_ms,...
-                    sum(punish_trial)), 800, win_rect(4)+30, textcol);
+                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (%s), %d trs since lick\neyetracking: %s\nforaging: time out %dms, reward %dms, correct time: %dms', ...
+                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, rew_trs_since_lick, ...
+                    eye_method, time_out_after, time_to_reward, round(loop_brk_ctr*ifi *1e3));
             else
-                Screen('DrawText', win_ctrl, sprintf('time-out punish: %d', give_punishments), 800, win_rect(4)+30, textcol);
+                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (reward on %s)\neyetracking: %s', ...
+                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, ...
+                    eye_method);
             end
             
-            Screen('DrawText', win_ctrl, sprintf('Fixation required for tr start: %d', require_fix_tr_init),  800, win_rect(4)+55, textcol);
-            Screen('DrawText', win_ctrl, sprintf('Pre-stim time in box: %dms\n', round(fix_pre_fr_ctr*ifi*1e3)), 800, win_rect(4)+80, textcol);
-            Screen('DrawText', win_ctrl, sprintf('Time pre-stim total: %dms\n', round(pre_stim_timer*1e3)), 800, win_rect(4)+105, textcol);
+            DrawFormattedText(win_ctrl, superstr, 80, win_rect(4)+30, textcol);
+            Screen('FrameRect', win_ctrl, [0 0 0], win_rect, 1);
             
+            if ~isempty(gaze_offset_x)
+                calib_superstr = sprintf('gaze offset x, y: %0.3f, %0.3f', gaze_offset_x, gaze_offset_y);
+            else
+                if length(cX) ==4
+                    calib_superstr = sprintf('calib x; y: %0.1f, %0.1f, %0.1f %0.1f; %0.1f, %0.1f, %0.1f %0.1f', ...
+                        cX(1), cX(2), cX(3),cX(4), cY(1), cY(2), cY(3),cY(4));
+                elseif length(cX) == 3
+                    if ~isempty(cProj)
+                        calib_superstr = sprintf('calib x; y: %0.1f, %0.1f, %0.1f; %0.1f, %0.1f, %0.1f\ncalib proj: %0.1f, %0.1f', ...
+                            cX(1), cX(2), cX(3), cY(1), cY(2), cY(3), cProj(1), cProj(2));
+                    else
+                        calib_superstr = sprintf('calib x; y: %0.1f, %0.1f, %0.1f; %0.1f, %0.1f, %0.1f', ...
+                            cX(1), cX(2), cX(3), cY(1), cY(2), cY(3));
+                    end
+                elseif length(cX) == 2
+                    calib_superstr = sprintf('calib x; y: %0.1f, %0.1f; %0.1f, %0.1f', ...
+                        cX(1), cX(2), cY(1), cY(2));
+                end
+            end
             
+            DrawFormattedText(win_ctrl, calib_superstr, 80, win_rect(4)+180, textcol);
+
+            punish_superstr = sprintf('give time-out punish: %d, dur: %dms, nr punish: %d\ntr start requires fixation: %d, pre-stim time in box: %dms\ntime pre-stim total: %dms\n', give_punishments, punish_length_ms_draw,...
+                sum(punish_trial), require_fix_tr_init,  round(fix_pre_fr_ctr*ifi*1e3), round(pre_stim_timer*1e3));
+            DrawFormattedText(win_ctrl, punish_superstr, 800, win_rect(4) + 30, textcol);
             
-            Screen('DrawText', win_ctrl, sprintf('Subject: %s, Session: %s', subject, session_time), 740, win_rect(4)+280);
         end
     end
 
@@ -1728,7 +1789,7 @@ end
                 Screen('FrameRect',win_ctrl,whitecol,curr_bb_stim_pre_dot,5);
             elseif nargin ==0 && seqidx ~= 0
                 Screen('FrameRect', win_ctrl, cols(seqidx+1,:), curr_bb, 5);
-            else nargin == 0 && seqidx == 0
+            else
                 Screen('FrameRect', win_ctrl, whitecol, curr_bb, 5);
             end
         end
@@ -1753,6 +1814,27 @@ end
         end
     end
 
+    function lick = checkLick()
+        if lick_flag
+            % check for licks
+            IOPort('Write', trig_hand, read_lick_cmd, 2);
+            lickout = IOPort('Read', trig_hand,1,3);
+            lick = lickout(1)-48;
+            
+            if ctrl_screen
+                if lick
+                    Screen('FillRect', win_ctrl, [0, 142, 204], lick_rect)
+                else
+                    Screen('FillRect', win_ctrl, [30, 30, 30], lick_rect)
+                end
+            end
+            
+            if lick
+                lick_idx = lick_idx + 1; 
+                lick_times_all(lick_idx) = GetSecs()- t_start_sec; 
+            end
+        end
+    end
 
 end
 

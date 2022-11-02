@@ -1201,7 +1201,11 @@ function connect_trig_arduino_push_Callback(hObject, eventdata, handles)
 port = get(handles.trig_arduino_com_edit, 'String');
 if ~handles.trig_arduino_connected
     baudrate = 115200;
-    [ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
+    readtimeout = 0.01; % 10ms 
+    %[ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
+    %configstr = ''; 
+    configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate, readtimeout); 
+    [ahand, errmsg] = IOPort('OpenSerialPort', port, configstr);
     if isempty(errmsg) % good, success
         fprintf('Trigger arduino on port %s is connected\n', port);
         trigger_arduino.ahand = ahand; 
@@ -1213,7 +1217,9 @@ if ~handles.trig_arduino_connected
         trigger_arduino.session_pin = 4; 
         trigger_arduino.trial_pin = 7; 
         trigger_arduino.stim_pin = 10; 
+        trigger_arduino.lick_pin = 3; 
         assign_trigger_pins(trigger_arduino); 
+        assign_lickometer_pins(trigger_arduino)
         handles.trigger_arduino = trigger_arduino;
         handles.trigger_arduino_comport = port; 
     else
