@@ -694,8 +694,8 @@ else
     iti_frames = ones(1,n_trs_tot)*round(inter_stim_interval(1)/1e3/ifi);
 end
 
-stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi);
-wait_after_rew_frames = round(wait_after_reward/1e3/ifi);
+stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi); % strimulus_pre_time in ms
+wait_after_rew_frames = round(wait_after_reward/ifi); % wait_after_reward in s
 
 Screen('FillRect', win, bg_col_val)
 %tex1 = Screen('MakeTexture', win, img);
@@ -1390,6 +1390,8 @@ for i = 1:n_trs_tot
                         end
                         
                     end
+                    
+                    %sca; keyboard
                     
                     for w = 1:wait_after_rew_frames
                         drawInfoText();
