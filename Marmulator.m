@@ -313,6 +313,10 @@ time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String'));
 
 n_rsvp = str2double(get(handles.n_rsvp_edit, 'String')); 
 break_after = str2double(get(handles.break_after_edit, 'String')); 
+
+if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'on')
+   stop(handles.gui_lick_timer); 
+end
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
@@ -327,6 +331,11 @@ if ~isempty(handles.subject_file)
     handles.reward_today = getRewardTodayFromTxt(handles.reward_today_txt); 
     updateSubjectLogTable(handles.subject_file, handles.reward_today, curr_date);
 end
+
+if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'off')
+   start(handles.gui_lick_timer); 
+end
+
 guidata(hObject, handles); 
 
 %f = parfeval(@EyeTracker_Calibrate_gui_fcn, 1, ra, handles.reward_pin, handles.subject,...
@@ -1102,9 +1111,14 @@ if h.trig_arduino_connected
 end
 
 if h.lick_arduino_connected
-    IOPort('Flush', h.lick_arduino.ahand); 
-    IOPort('Close', h.lick_arduino.ahand);    
+    IOPort('Flush', h.lick_arduino.ahand);
+    IOPort('Close', h.lick_arduino.ahand);
     disp('Lickometer arduino disconnected');
+    try
+        stop(h.gui_lick_timer);
+        delete(h.gui_lick_timer);
+    catch
+    end
 end
 
 catch me
@@ -1293,16 +1307,28 @@ if ~handles.lick_arduino_connected
         set(handles.lick_arduino_com_edit, 'enable', 'off');
         handles.lick_arduino_connected = 1;
         % MAKE THESE PART OF SETUP SOON 
-        lick_arduino.lick_pin = 3; 
-        assign_lickometer_pins(lick_arduino)
+        lick_arduino.lick_pin = 3;
+        assign_lickometer_pins(lick_arduino); 
         handles.lick_arduino = lick_arduino;
-        handles.lick_arduino_comport = port; 
+        handles.lick_arduino_comport = port;
+        %%% set up timer for gui display of licks 
+        read_lick_cmd = gen_lickometer_command(lick_arduino); 
+        lick_box_hand = handles.lick_box; 
+        timer_period = 0.05;
+        t = timer('TimerFcn', {@checkLickometer_gui, ahand, read_lick_cmd, lick_box_hand}, 'Period', timer_period, 'ExecutionMode', 'fixedDelay');        
+        handles.gui_lick_timer = t;
+        start(handles.gui_lick_timer); 
     else
         fprintf('ERROR CONNECTING TO %s\n', port);
         fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
         handles.lick_arduino_connected = 0;
     end
 else
+    try 
+        stop(handles.gui_lick_timer); 
+        delete(handles.gui_lick_timer); 
+    catch 
+    end
     IOPort('Flush', handles.lick_arduino.ahand); 
     IOPort('Close', handles.lick_arduino.ahand);    
     set(handles.lick_arduino_com_edit, 'enable', 'on');

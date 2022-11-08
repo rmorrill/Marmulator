@@ -74,6 +74,7 @@ if ~isempty(lick_arduino)
     read_lick_cmd = ['1' Alphabet(lick_arduino.lick_pin + 1)];
     lick_arduino_pin = lick_arduino.lick_pin; 
 else
+    rew_trs_since_lick = NaN;
     lick_flag = false; 
     lick_times_all = []; 
     lick_arduino_pin = [];
@@ -1641,8 +1642,12 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 %% execute plots automatically
 
-if contains(calib_settings.expt_params,'center_point')
-    get_mean_x_y_pts(fullfile(save_data_dir, savefname))
+try
+    if contains(calib_settings.expt_params,'center_point')
+        get_mean_x_y_pts(fullfile(save_data_dir, savefname))
+    end
+catch me
+    disp('Attempted to run get_mean_x_y_pts.m'); 
 end
 
 %%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
@@ -1755,8 +1760,8 @@ end
                     stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, rew_trs_since_lick, ...
                     eye_method, time_out_after, time_to_reward, round(loop_brk_ctr*ifi *1e3));
             else
-                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (reward on %s)\neyetracking: %s', ...
-                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, ...
+                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (%s), %d trs since lick\neyetracking: %s', ...
+                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, rew_trs_since_lick, ...
                     eye_method);
             end
             
