@@ -4,18 +4,11 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, setup_config)
+    trigger_arduino, lick_arduino, setup_config)
 %keyboard
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
-
-lick_flag = true;
-lick_rect = [1490, 890, 1530, 930];
-rew_trs_since_lick = NaN; 
-stop_rewards_n_nolicks = 4; 
-lick_times_all = nan(1,1e5); 
-lick_idx = 0; 
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -56,8 +49,6 @@ if ~isempty(trigger_arduino)
     trig_hand = trigger_arduino.ahand;
     trig_flag = true;
     [sess_trig_cmd, trial_trig_cmd, stim_trig_cmd] = gen_trig_commands(trigger_arduino);
-    Alphabet = 'abcdefghijklmnopqrstuvwxyz';
-    read_lick_cmd = ['1' Alphabet(trigger_arduino.lick_pin + 1)];
     % ensure that everything is off
     % turn off session trigger
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
@@ -68,7 +59,28 @@ if ~isempty(trigger_arduino)
     WaitSecs(0.05);
 else
     trig_flag = false;
+    fprintf('WARNING: NO TRIGGER ARDUINO HANDLE PROVIDED!\nTriggers will not be recorded\n');  
 end
+
+if ~isempty(lick_arduino)
+    lick_hand = lick_arduino.ahand;
+    lick_flag = true;
+    lick_rect = [1490, 890, 1530, 930];
+    rew_trs_since_lick = NaN;
+    stop_rewards_n_nolicks = 4;
+    lick_times_all = nan(1,1e5);
+    lick_idx = 0;
+    Alphabet = 'abcdefghijklmnopqrstuvwxyz';
+    read_lick_cmd = ['1' Alphabet(lick_arduino.lick_pin + 1)];
+    lick_arduino_pin = lick_arduino.lick_pin; 
+else
+    rew_trs_since_lick = NaN;
+    lick_flag = false; 
+    lick_times_all = []; 
+    lick_arduino_pin = [];
+    fprintf('WARNING: NO LICKOMETER ARDUINO HANDLE PROVIDED!\nLicks will not be recorded\n');  
+end
+
 
 PsychJavaSwingCleanup;
 
@@ -223,6 +235,8 @@ apply_gaze_center_adj = true;
 photodiode_flash = true;
 flash_rect_size = [90 90];
 
+bonus_reward_min_wait = 1; % give bonus rewards at most every 1s 
+
 % if isfield(s, 'apply_gaze_center_adj')
 %     gaze_center_adj_y = s.gaze_center_adj_y;
 %     gaze_center_adj_x = s.gaze_center_adj_x;
@@ -287,7 +301,8 @@ PsychJavaSwingCleanup;
 AssertOpenGL;
 InitializePsychSound(1);
 esc_key = KbName('ESC');
-rew_key = KbName('r');
+rew_end_key = KbName('r');
+bonus_rew_key = KbName('b'); 
 
 % setup eyetracker-related
 if strcmp(eye_method, 'rand') | strcmp(eye_method, 'mouse')
@@ -415,7 +430,6 @@ if photodiode_flash
     flash_rect = [win_rect(3)-flash_rect_size(1), win_rect(4)-flash_rect_size(2),...
         win_rect(3), win_rect(4)];
 end
-
 
 % turn on session trigger
 if trig_flag
@@ -660,7 +674,9 @@ end
 wake_up_image_displayed = cell(1, n_trs_tot);
 
 if lick_flag
-    lick_trs = false(1,n_trs_tot); 
+    lick_trial = false(1,n_trs_tot); 
+else
+    lick_trial = []; 
 end
 
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
@@ -693,8 +709,8 @@ else
     iti_frames = ones(1,n_trs_tot)*round(inter_stim_interval(1)/1e3/ifi);
 end
 
-stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi);
-wait_after_rew_frames = round(wait_after_reward/1e3/ifi);
+stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi); % strimulus_pre_time in ms
+wait_after_rew_frames = round(wait_after_reward/ifi); % wait_after_reward in s
 
 Screen('FillRect', win, bg_col_val)
 %tex1 = Screen('MakeTexture', win, img);
@@ -702,8 +718,9 @@ seqidx = 0;
 vbl = Screen('Flip', win);
 t_start_sec = GetSecs();
 
-reward_trial = false(1,n_trs_tot); % for recording whether trial was rewarded
-punish_trial = false(1,n_trs_tot);
+reward_trial = false(1,n_trs_tot); % for recording whether reward was administered
+correct_trial = false(1,n_trs_tot); % for recording whether a trial was correct - not necesssarily same as reward_trial if using stop_rewards_n_nolicks
+punish_trial = false(1,n_trs_tot); % whether a trial was punished
 reward_time = nan(1,n_trs_tot); % for recording the time of a reward
 time_to_bb = nan(1,n_trs_tot);
 trial_aborted = false(1, n_trs_tot);
@@ -747,6 +764,8 @@ end
 
 reward_ct = 0;
 man_reward_ct = 0;
+bonus_reward_ct = 0; 
+bonus_reward_t = []; 
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
@@ -794,12 +813,7 @@ for i = 1:n_trs_tot
         drawGoodEyePts(0);
     end
     get_eyetracker_draw_dots();
-    if lick_flag 
-        lick = checkLick(); 
-        if lick
-           lick_trs(i) = true; 
-        end
-    end
+    checkLick(); 
     
     Screen('FillRect', win, bg_col_val)
     vbl = Screen('Flip', win);
@@ -825,12 +839,8 @@ for i = 1:n_trs_tot
         if draw_retain_bb_pts
             drawGoodEyePts(0);
         end
-        if lick_flag
-            lick = checkLick();
-            if lick
-                lick_trs(i) = true;
-            end
-        end
+        checkLick(); 
+
         vbl = Screen('Flip', win, vbl + halfifi);
         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
         get_eyetracker_draw_dots();
@@ -853,12 +863,7 @@ for i = 1:n_trs_tot
             idx_all = idx_all +1;
             drawInfoText();
             drawBoundingBoxes(curr_bb_stim_pre_dot);
-            if lick_flag
-                lick = checkLick();
-                if lick
-                    lick_trs(i) = true;
-                end
-            end
+            checkLick(); 
             
             if seqidx ~= 0
                 if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
@@ -884,9 +889,16 @@ for i = 1:n_trs_tot
             if find(kCode) == esc_key
                 disp('ESC key recognized, exiting');
                 exit_flag = 1;
-                % calib_end_t(i) =  GetSecs()-t_start_sec;
                 trial_aborted(i) = true;
                 break
+            elseif find(kCode) == bonus_rew_key
+                if isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait 
+                    bonus_reward_t(end+1) = GetSecs() - t_start_sec;
+                    %man_reward_ct = man_reward_ct + 1;
+                    bonus_reward_ct = bonus_reward_ct + 1;
+                    pumpReward_updateGUI();
+                    fprintf('bonus reward, time = %0.3fs\n', bonus_reward_t(end));
+                end
             end
             
             
@@ -1164,13 +1176,7 @@ for i = 1:n_trs_tot
                 %inter_rsvp_fr_ctr
             end
             
-            
-            if lick_flag
-                lick = checkLick();
-                if lick
-                    lick_trs(i) = true;
-                end
-            end
+            checkLick(); 
             
             if strcmp(reward_on, 'location')
                 %disp(loop_brk_ctr)
@@ -1302,17 +1308,23 @@ for i = 1:n_trs_tot
             calib_end_t(i) =  GetSecs()-t_start_sec;
             trial_aborted(i) = true;
             break
-        elseif find(kCode) == rew_key
+        elseif find(kCode) == rew_end_key
             manual_reward_t(i) =  GetSecs()-t_start_sec;
             man_reward_ct = man_reward_ct + 1;
-            fprintf('manual reward! time = %0.3fs\n', manual_reward_t(i));
+            fprintf('manual reward with trial end! time = %0.3fs\n', manual_reward_t(i));
             end_stim = 1;
             manual_reward_flag = true;
+        elseif find(kCode) == bonus_rew_key
+            if  isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait
+                bonus_reward_t(end+1) = GetSecs() - t_start_sec;
+                %man_reward_ct = man_reward_ct + 1;
+                bonus_reward_ct = bonus_reward_ct + 1;
+                pumpReward_updateGUI();
+                fprintf('bonus reward, time = %0.3fs\n', bonus_reward_t(end));
+            end
         end
         
         if end_stim
-
-            
             Screen('FillRect', win, bg_col_val);
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
@@ -1340,9 +1352,9 @@ for i = 1:n_trs_tot
             
             if give_rewards
                 if strcmp(trial_mode, 'trial') || seqidx == 0
-                    if strcmp(reward_on, 'quality') || seqidx == 0
+                    if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
                         frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
-                    elseif strcmp(reward_on, 'location')
+                    elseif strcmp(reward_on, 'location') || (seqidx == 0 && eye_method_mouse)
                         frac_good = sum(eye_in_bb_curr)/numel(eye_in_bb_curr);
                     end
                     
@@ -1378,13 +1390,12 @@ for i = 1:n_trs_tot
                 end
                 
                 if reward_this_trial
-                    reward_trial(i) = true;
-                    
+                    correct_trial(i) = true; 
                     if lick_flag
                         %%% check trials since last lick
-                        if lick_trs(i)
+                        if lick_trial(i)
                             rew_trs_since_lick = 0;
-                        elseif i == 1 && ~lick_trs(i)
+                        elseif i == 1 && ~lick_trial(i)
                             rew_trs_since_lick = 1; 
                         else
                             rew_trs_since_lick = rew_trs_since_lick + 1; 
@@ -1396,31 +1407,52 @@ for i = 1:n_trs_tot
                     end
                     % fprintf('****REWARD TRIAL %d, %0.2f good\n', i, frac_good);
                     fprintf('****REWARD TRIAL %d\n', i);
+                    
                     if play_reward_sound
                         sound(aud_y, aud_fs);
-                        disp('sound played');
+                        %disp('sound played');
                     end
+                    
                     if ~isempty(reward_pumphand)
-                        
                         if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
                             reward_time(i) = GetSecs()-t_start_sec;
-                            if reward_serial
-                                writeline(reward_pumphand, 'RUN');
-                                %WaitSecs(reward_on_dur);
-                            else
-                                reward_pumphand.digitalWrite(reward_arduino_pin, 1);
-                                WaitSecs(reward_on_dur);
-                                reward_pumphand.digitalWrite(10, 0);
-                            end
-                            set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
-                            drawnow;
+                            reward_trial(i) = true;
+%                             if reward_serial
+%                                 writeline(reward_pumphand, 'RUN');
+%                                 
+%                                 %WaitSecs(reward_on_dur);
+%                             else
+%                                 reward_pumphand.digitalWrite(reward_arduino_pin, 1);
+%                                 WaitSecs(reward_on_dur);
+%                                 reward_pumphand.digitalWrite(10, 0);
+%                             end
+%                             %t1_rew = GetSecs();
+%                             set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
+%                             drawnow;                                
+                            %t2_rew = GetSecs(); 
+                            %sca; keyboard 
+                            pumpReward_updateGUI(); 
                         elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
                             fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick); 
                         end
                         
-                        WaitSecs(wait_after_reward);
-                        
                     end
+                    
+                    %sca; keyboard
+                    
+                    for w = 1:wait_after_rew_frames
+                        drawInfoText();
+                        drawBoundingBoxes();
+                        if draw_retain_bb_pts
+                            drawGoodEyePts(0);
+                        end
+                        checkLick(); 
+
+                        vbl = Screen('Flip', win, vbl + halfifi);
+                        if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
+                    end
+                    %WaitSecs(wait_after_reward);
+                    
                 else
                     fprintf('no reward: trial %d\n', i);
                 end
@@ -1437,7 +1469,7 @@ for i = 1:n_trs_tot
                     if ctrl_screen; Screen('FillRect', win_ctrl, blackcol); end
                     drawInfoText(1);
                     drawBoundingBoxes();
-                    lick = checkLick();
+                    checkLick(); 
                     if draw_retain_bb_pts
                         drawGoodEyePts(0);
                     end
@@ -1611,6 +1643,7 @@ settings.ifi_monitor = ifi;
 reward.give_rewards = true;
 reward.n_rewards_given = sum(reward_trial);
 reward.reward_sequence = reward_trial;
+reward.correct_trial = correct_trial; 
 reward.reward_vol = reward_vol;
 reward.arduino_pin_reward = reward_arduino_pin;
 reward.reward_thresh_frac_good_glint = reward_thresh;
@@ -1621,6 +1654,12 @@ reward.play_sound = play_reward_sound;
 reward.sound_file = reward_sound_file;
 reward.manual_reward_t = manual_reward_t;
 reward.man_reward_ct = man_reward_ct;
+reward.bonus_reward_ct = bonus_reward_ct; 
+reward.bonus_reward_t = bonus_reward_t; 
+reward.lickometer = lick_flag; 
+reward.lick_times_all = lick_times_all(~isnan(lick_times_all)); 
+reward.lick_arduino_pin = lick_arduino_pin; 
+reward.lick_trial = lick_trial; 
 
 punish.give_punishments = give_punishments;
 punish.n_puns_given = sum(punish_trial);
@@ -1651,8 +1690,12 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 %% execute plots automatically
 
-if contains(calib_settings.expt_params,'center_point')
-    get_mean_x_y_pts(fullfile(save_data_dir, savefname))
+try
+    if contains(calib_settings.expt_params,'center_point')
+        get_mean_x_y_pts(fullfile(save_data_dir, savefname))
+    end
+catch me
+    disp('Attempted to run get_mean_x_y_pts.m'); 
 end
 
 %%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
@@ -1766,8 +1809,8 @@ end
                     stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, rew_trs_since_lick, ...
                     eye_method, time_out_after, time_to_reward, round(loop_brk_ctr*ifi *1e3));
             else
-                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (reward on %s)\neyetracking: %s', ...
-                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, ...
+                superstr = sprintf('mode: %s, %s; tr %d of %d, tr time: %dms\n%d auto reward, %d manual (%s), %d trs since lick\neyetracking: %s', ...
+                    stim_mode, trial_mode, curr_tr, n_trs_tot, round(stfridx*ifi*1e3), reward_ct, man_reward_ct, reward_on, rew_trs_since_lick, ...
                     eye_method);
             end
             
@@ -1839,8 +1882,8 @@ end
     function lick = checkLick()
         if lick_flag
             % check for licks
-            IOPort('Write', trig_hand, read_lick_cmd, 2);
-            lickout = IOPort('Read', trig_hand,1,3);
+            IOPort('Write', lick_hand, read_lick_cmd, 2);
+            lickout = IOPort('Read', lick_hand,1,3);
             lick = lickout(1)-48;
             
             if ctrl_screen
@@ -1853,9 +1896,24 @@ end
             
             if lick
                 lick_idx = lick_idx + 1; 
-                lick_times_all(lick_idx) = GetSecs()- t_start_sec; 
+                lick_times_all(lick_idx) = GetSecs()- t_start_sec;
+                if ~lick_trial(curr_tr)
+                    fprintf('lick tr %d\n', curr_tr); 
+                end
+                lick_trial(curr_tr) = true;    
+                
+                if correct_trial(curr_tr)
+                    rew_trs_since_lick = 0; 
+                end
+                
             end
         end
+    end
+
+    function pumpReward_updateGUI()
+        writeline(reward_pumphand, 'RUN');
+        set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
+        drawnow;
     end
 
 end

@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 18-Oct-2022 19:45:24
+% Last Modified by GUIDE v2.5 02-Nov-2022 12:49:58
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -68,7 +68,8 @@ if ~exist(setup_params_file, 'file')
 else
     sc = load(setup_params_file); 
     set(handles.com_serial_edit, 'String', sc.serial_pump_comport); 
-    set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport)
+    set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport); 
+    set(handles.lick_arduino_com_edit, 'String', sc.arduino_lickometer_comport); 
     set(handles.com_edit, 'String', sc.arduino_pump_comport); 
     set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
     handles.base_dir = sc.marmulator_base_dir;
@@ -86,6 +87,7 @@ else
 end
 
 handles.trig_arduino_connected = 0; 
+handles.lick_arduino_connected = 0; 
 handles.pump_arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
@@ -288,6 +290,10 @@ if ~handles.trig_arduino_connected
     handles.trigger_arduino = []; 
 end
 
+if ~handles.lick_arduino_connected 
+    handles.lick_arduino = []; 
+end
+
 gaze_offset_x = str2num(get(handles.offset_x_edit, 'String')); 
 gaze_offset_y = str2num(get(handles.offset_y_edit, 'String')); 
 gaze_offset =[gaze_offset_x, gaze_offset_y]; 
@@ -307,6 +313,10 @@ time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String'));
 
 n_rsvp = str2double(get(handles.n_rsvp_edit, 'String')); 
 break_after = str2double(get(handles.break_after_edit, 'String')); 
+
+if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'on')
+   stop(handles.gui_lick_timer); 
+end
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
@@ -314,13 +324,18 @@ EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
-    handles.trigger_arduino, handles.setup_config);
+    handles.trigger_arduino, handles.lick_arduino, handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
     handles.reward_today = getRewardTodayFromTxt(handles.reward_today_txt); 
     updateSubjectLogTable(handles.subject_file, handles.reward_today, curr_date);
 end
+
+if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'off')
+   start(handles.gui_lick_timer); 
+end
+
 guidata(hObject, handles); 
 
 %f = parfeval(@EyeTracker_Calibrate_gui_fcn, 1, ra, handles.reward_pin, handles.subject,...
@@ -1095,6 +1110,17 @@ if h.trig_arduino_connected
     disp('Trigger arduino disconnected');
 end
 
+if h.lick_arduino_connected
+    IOPort('Flush', h.lick_arduino.ahand);
+    IOPort('Close', h.lick_arduino.ahand);
+    disp('Lickometer arduino disconnected');
+    try
+        stop(h.gui_lick_timer);
+        delete(h.gui_lick_timer);
+    catch
+    end
+end
+
 catch me
 end
 delete(hObject);
@@ -1217,9 +1243,7 @@ if ~handles.trig_arduino_connected
         trigger_arduino.session_pin = 4; 
         trigger_arduino.trial_pin = 7; 
         trigger_arduino.stim_pin = 10; 
-        trigger_arduino.lick_pin = 3; 
         assign_trigger_pins(trigger_arduino); 
-        assign_lickometer_pins(trigger_arduino)
         handles.trigger_arduino = trigger_arduino;
         handles.trigger_arduino_comport = port; 
     else
@@ -1235,6 +1259,83 @@ else
     handles.trig_arduino_connected = 0;
     fprintf('Disconnecting from port %s\n', port);
     handles.trigger_arduino_comport = []; 
+end
+
+guidata(hObject, handles);
+
+
+
+function lick_arduino_com_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to lick_arduino_com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of lick_arduino_com_edit as text
+%        str2double(get(hObject,'String')) returns contents of lick_arduino_com_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function lick_arduino_com_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to lick_arduino_com_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in connect_lick_arduino_push.
+function connect_lick_arduino_push_Callback(hObject, eventdata, handles)
+% hObject    handle to connect_lick_arduino_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+port = get(handles.lick_arduino_com_edit, 'String');
+if ~handles.lick_arduino_connected
+    baudrate = 115200;
+    readtimeout = 0.01; % 10ms 
+    configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate, readtimeout); 
+    [ahand, errmsg] = IOPort('OpenSerialPort', port, configstr);
+    if isempty(errmsg) % good, success
+        fprintf('Lickometer arduino on port %s is connected\n', port);
+        lick_arduino.ahand = ahand; 
+        IOPort('Flush', ahand); 
+        set(gcbo, 'String', 'Disconnect');
+        set(handles.lick_arduino_com_edit, 'enable', 'off');
+        handles.lick_arduino_connected = 1;
+        % MAKE THESE PART OF SETUP SOON 
+        lick_arduino.lick_pin = 3;
+        assign_lickometer_pins(lick_arduino); 
+        handles.lick_arduino = lick_arduino;
+        handles.lick_arduino_comport = port;
+        %%% set up timer for gui display of licks 
+        read_lick_cmd = gen_lickometer_command(lick_arduino); 
+        lick_box_hand = handles.lick_box; 
+        timer_period = 0.05;
+        t = timer('TimerFcn', {@checkLickometer_gui, ahand, read_lick_cmd, lick_box_hand}, 'Period', timer_period, 'ExecutionMode', 'fixedDelay');        
+        handles.gui_lick_timer = t;
+        start(handles.gui_lick_timer); 
+    else
+        fprintf('ERROR CONNECTING TO %s\n', port);
+        fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
+        handles.lick_arduino_connected = 0;
+    end
+else
+    try 
+        stop(handles.gui_lick_timer); 
+        delete(handles.gui_lick_timer); 
+    catch 
+    end
+    IOPort('Flush', handles.lick_arduino.ahand); 
+    IOPort('Close', handles.lick_arduino.ahand);    
+    set(handles.lick_arduino_com_edit, 'enable', 'on');
+    set(gcbo, 'String', 'Connect');
+    handles.lick_arduino_connected = 0;
+    fprintf('Disconnecting from port %s\n', port);
+    handles.lick_arduino_comport = []; 
 end
 
 guidata(hObject, handles);
