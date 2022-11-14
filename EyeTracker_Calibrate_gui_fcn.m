@@ -4,7 +4,7 @@ function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, rewar
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, lick_arduino, setup_config)
+    trigger_arduino, lick_arduino, reward_type, setup_config)
 %keyboard
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -1372,7 +1372,9 @@ for i = 1:n_trs_tot
                     correct_trial(i) = true; 
                     if lick_flag
                         %%% check trials since last lick
-                        if lick_trial(i)
+                        if isnan(rew_trs_since_lick) && ~lick_trial(i)
+                            rew_trs_since_lick  = i; 
+                        elseif lick_trial(i)
                             rew_trs_since_lick = 0;
                         elseif i == 1 && ~lick_trial(i)
                             rew_trs_since_lick = 1; 
@@ -1385,6 +1387,7 @@ for i = 1:n_trs_tot
                         reward_ct = reward_ct + 1;
                     end
                     % fprintf('****REWARD TRIAL %d, %0.2f good\n', i, frac_good);
+                    
                     fprintf('****REWARD TRIAL %d\n', i);
                     
                     if play_reward_sound
@@ -1620,6 +1623,7 @@ settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
 
 reward.give_rewards = true;
+reward.reward_type = reward_type; 
 reward.n_rewards_given = sum(reward_trial);
 reward.reward_sequence = reward_trial;
 reward.correct_trial = correct_trial; 

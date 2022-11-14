@@ -17,6 +17,8 @@ default_gaze_center_adjust = [0,116]; %2022-10-25 yj
 screenid_stim = 1; 
 screenid_ctrl = 2; 
 
+reward_types = {'coconut_milk', 'apple_juice', 'water', 'ensure_diluted', 'evaporated_milk'}; 
+
 %%%% DO NOT MODIFY %%%%
 setup_date = datestr(now, 'yyyy-mm-dd_HH-MM_SS'); 
 setup_save_path = fullfile(marmulator_base_dir, 'setup_config.mat'); 
@@ -25,7 +27,7 @@ save(setup_save_path, 'marmulator_base_dir', 'save_dir_local',...
     'save_dir_remote', 'eyetracker_toolbox_dir', 'serial_pump_comport',...
     'arduino_pump_comport', 'arduino_lickometer_comport', 'arduino_triggers_comport',...
     'default_gaze_center_adjust', 'screenid_stim', 'screenid_ctrl', ...
-    'setup_date');  
+    'setup_date', 'reward_types');  
 
 fprintf('saved setup config to %s\n', setup_save_path); 
 
