@@ -1,5 +1,5 @@
 function checkLickometer_gui(obj, event, ahand, read_lick_cmd, lick_box_hand)
-
+mlock
 IOPort('Write', ahand, read_lick_cmd, 2);
 val = IOPort('Read', ahand, 1,3);
 lick = val(1)-48;
