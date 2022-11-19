@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 02-Nov-2022 12:49:58
+% Last Modified by GUIDE v2.5 14-Nov-2022 16:06:46
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -75,6 +75,8 @@ else
     handles.base_dir = sc.marmulator_base_dir;
     handles.default_calib_dir = sc.save_dir_local; 
     handles.setup_config = sc; 
+    handles.reward_list = [get(handles.reward_popup, 'String') sc.reward_types]; 
+    set(handles.reward_popup, 'String', handles.reward_list); 
 end
 
 logo_file = fullfile(handles.base_dir, 'gui', 'marmulator_logo.png'); 
@@ -256,7 +258,6 @@ if ~isfield(handles, 'params_file') || isempty(handles.params_file)
     return
 end
 
-
 if handles.pump_arduino_connected 
     ra = handles.reward_arduino; 
 elseif handles.pump_serial_connected
@@ -276,7 +277,6 @@ if ~strcmp(curr_date, handles.curr_date)
     set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', 0)); 
     handles.curr_date = curr_date; 
 end
-
 
 subj_tmp = get(handles.subject_edit, 'String'); 
 if isempty(subj_tmp)
@@ -317,6 +317,19 @@ break_after = str2double(get(handles.break_after_edit, 'String'));
 if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'on')
    stop(handles.gui_lick_timer); 
 end
+
+% get selected reward string
+reward_list = get(handles.reward_popup, 'String'); 
+reward_idx = get(handles.reward_popup, 'Value'); 
+handles.reward_selected = reward_list{reward_idx}; 
+
+if ~isempty(ra)
+    % check if reward type is selected
+    if strcmp(handles.reward_selected, '[select reward type]')
+        disp('Pump is connected - please select a reward type');
+        return
+    end
+end
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
@@ -324,7 +337,8 @@ EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
-    handles.trigger_arduino, handles.lick_arduino, handles.setup_config);
+    handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
+    handles.setup_config);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -1339,3 +1353,28 @@ else
 end
 
 guidata(hObject, handles);
+
+
+% --- Executes on selection change in reward_popup.
+function reward_popup_Callback(hObject, eventdata, handles)
+% hObject    handle to reward_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: contents = cellstr(get(hObject,'String')) returns reward_popup contents as cell array
+%        contents{get(hObject,'Value')} returns selected item from reward_popup
+
+
+
+
+% --- Executes during object creation, after setting all properties.
+function reward_popup_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to reward_popup (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: popupmenu controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
