@@ -14,7 +14,7 @@ time_session = d_string{2};
 % session info 
 columns = {'Date','Session','Offset x', 'Offset y', 'Calibration Used?', 'Stimuli', 'Trial mode',...
     'Stimuli Size','Stimuli Location', 'Bounding box','n_rsvp','Response time', 'Hold time', 'Time to initiate','total n_trials','correct n_trials','Hit rate',...
-    'cumulative n_trials'}; 
+    'cumulative n_trials','reward vol','reward type','cumulative reward vol'}; 
 
 session_file_dir = fullfile(log_dir,settings.subject,strcat(date_session,'.mat')); 
 if ~exist(session_file_dir) 
@@ -22,10 +22,12 @@ if ~exist(session_file_dir)
     save(session_file_dir,'T'); 
     curridx= 1;
     cumulative_n_trials = 0; 
+    cumulative_reward = 0; 
 else
     load(session_file_dir); 
     curridx = height(T) + 1; 
     cumulative_n_trials = sum(T.('correct n_trials')); 
+    cumulative_reward = sum(T.('reward vol')); 
     T = table2cell(T);
 end
 
@@ -113,12 +115,43 @@ if isfield(calib_settings,'require_fix_tr_init')
 end
 
 T{curridx,15} = calib.n_completed;
-T{curridx,16} = reward.n_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze 
+if isfield(reward,'correct_trial')
+    T{curridx,16} = sum(reward.correct_trial); % correct trials
+else
+    T{curridx,16} = reward.n_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze
+end
 
-T{curridx,17} = T{curridx,16}/calib.n_completed;
+
+T{curridx,17} = T{curridx,16}/T{curridx,15};
 T{curridx,18} = cumulative_n_trials + T{curridx,16}; 
+
+if isfield(reward,'nr_rewards_given')
+    T{curridx,19} =reward.nr_rewards_given * reward.reward_vol;
+elseif isfield(reward,'n_rewards_given')
+    T{curridx,19} = reward.n_rewards_given * reward.reward_vol;
+end
+
+if isfield(reward,'man_reward_ct')
+    T{curridx,19} = T{curridx,19} + reward.man_reward_ct;
+end
+
+if isfield(reward,'bonus_reward_ct')
+    T{curridx,19} = T{curridx,19} + reward.bonus_reward_ct;
+end
+
+if isfield(reward,'reward_type')
+    T{curridx,20} = reward.reward_type;
+end
+
+T{curridx,21} = cumulative_reward+ T{curridx,19}; 
+
+if isfield(reward,'lick_trial')
+    T{curridx,22} = sum(reward.lick_trial);
+end
+
+% number of successful image presentations
+
 T = cell2table(T); 
 T.Properties.VariableNames = columns;
 save(session_file_dir,'T'); 
-
 end
