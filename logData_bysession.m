@@ -14,7 +14,8 @@ time_session = d_string{2};
 % session info 
 columns = {'Date','Session','Offset x', 'Offset y', 'Calibration Used?', 'Stimuli', 'Trial mode',...
     'Stimuli Size','Stimuli Location', 'Bounding box','n_rsvp','Response time', 'Hold time', 'Time to initiate','total n_trials','correct n_trials','Hit rate',...
-    'cumulative n_trials','reward vol','reward type','cumulative reward vol'}; 
+    'cumulative n_trials','reward vol','reward type','cumulative reward vol','n_trials_licked','n_imgs_seen','cumulative n_imgs_seen',...
+    'experiment param file'}; 
 
 session_file_dir = fullfile(log_dir,settings.subject,strcat(date_session,'.mat')); 
 if ~exist(session_file_dir) 
@@ -23,20 +24,24 @@ if ~exist(session_file_dir)
     curridx= 1;
     cumulative_n_trials = 0; 
     cumulative_reward = 0; 
+    cumulative_n_imgs_seen = 0;
 else
     load(session_file_dir); 
     curridx = height(T) + 1; 
     cumulative_n_trials = sum(T.('correct n_trials')); 
     cumulative_reward = sum(T.('reward vol')); 
+    cumulative_n_imgs_seen = sum(T.('n_imgs_seen')); 
     T = table2cell(T);
 end
 
 T{curridx,1} = date_session;
 T{curridx,2} = time_session;
     
-if ~isempty(calib.gaze_offset)
-    T{curridx,3} = calib.gaze_offset(1);
-    T{curridx,4} = calib.gaze_offset(2);
+if isfield(calib,'gaze_offset')
+    if ~isempty(calib.gaze_offset)
+        T{curridx,3} = calib.gaze_offset(1);
+        T{curridx,4} = calib.gaze_offset(2);
+    end
 end
 if eyetrack.calib_applied == 1
     T{curridx,5} = strcat('X: ', strjoin(cellstr(num2str(eyetrack.cX'))),...
@@ -67,35 +72,47 @@ if strcmp(T{curridx,6}, 'images')
     end
 end
 
-if contains(calib_settings.expt_params,'quadrant')
-    T{curridx,6} = strcat('quadrant', {' '}, T{curridx,6});
-end
-
-T{curridx,7} = calib.trial_mode;
-stim_size = [calib_settings.stim_rect_size_x;calib_settings.stim_rect_size_y]; 
-T{curridx,8} = stim_size;
-T{curridx,9} = calib.pts; 
-center_screen = [calib_settings.disp_rect(3)/2, calib_settings.disp_rect(4)/2];
-
-if contains(calib_settings.expt_params,'quadrant')
-    T{curridx,10} = repmat([calib_settings.disp_rect(3)/2,calib_settings.disp_rect(4)/2],[length(calib.pts),1]); % quadrant 
-elseif strcmp(calib.reward_on,'quality')
-    T{curridx,10} = NaN;
-else
-    if isfield(calib_settings,'bounding_rect_size_x')
-        T{curridx,10}  = [calib_settings.bounding_rect_size_x,calib_settings.bounding_rect_size_y];
+if isfield(calib_settings,'expt_params')
+    
+    str_split = strsplit(calib_settings.expt_params,'\');
+    T{curridx,25} = str_split{length(str_split)}; 
+    
+    if contains(calib_settings.expt_params,'quadrant')
+        T{curridx,6} = strcat('quadrant', {' '}, T{curridx,6});
+    end
+    
+    if contains(calib_settings.expt_params,'quadrant')
+        T{curridx,10} = repmat([calib_settings.disp_rect(3)/2,calib_settings.disp_rect(4)/2],[length(calib.pts),1]); % quadrant 
+    elseif strcmp(calib.reward_on,'quality')
+        T{curridx,10} = NaN;
     else
-        % previous data didn't store bounding box 
-        load(calib_settings.expt_params);
-        T{curridx,10} = [bounding_rect_size_x,bounding_rect_size_y];
+        if isfield(calib_settings,'bounding_rect_size_x')
+            T{curridx,10}  = [calib_settings.bounding_rect_size_x,calib_settings.bounding_rect_size_y];
+        else
+            
+        end
     end
 end
+
+if isfield(calib,'trial_mode')
+    T{curridx,7} = calib.trial_mode;
+end
+
+if isfield(calib_settings,'stim_rect_size_x')
+    stim_size = [calib_settings.stim_rect_size_x;calib_settings.stim_rect_size_y]; 
+    T{curridx,8} = stim_size;
+end
+
+T{curridx,9} = calib.pts; 
+center_screen = [calib_settings.disp_rect(3)/2, calib_settings.disp_rect(4)/2];
 
 if isfield(calib_settings,'n_rsvp')
     T{curridx,11} = calib_settings.n_rsvp; 
 end
 
-T{curridx,12} = calib.time_out_after;
+if isfield(calib,'time_out_after')
+    T{curridx,12} = calib.time_out_after;
+end
 
 if isfield(calib_settings,'n_rsvp')
     if calib_settings.n_rsvp >1
@@ -104,7 +121,9 @@ if isfield(calib_settings,'n_rsvp')
         T{curridx,13} = calib.time_to_reward;
     end
 else
-    T{curridx,13} = calib.time_to_reward;
+    if isfield(calib,'time_to_reward')
+        T{curridx,13} = calib.time_to_reward;
+    end
 end
 
 if isfield(calib_settings,'require_fix_tr_init')
@@ -117,8 +136,10 @@ end
 T{curridx,15} = calib.n_completed;
 if isfield(reward,'correct_trial')
     T{curridx,16} = sum(reward.correct_trial); % correct trials
-else
+elseif isfield(reward,'n_reward_given') % previous Marmulator version
     T{curridx,16} = reward.n_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze
+elseif isfield(reward,'nr_rewards_given')
+    T{curridx,16} = reward.nr_rewards_given; 
 end
 
 
@@ -132,11 +153,11 @@ elseif isfield(reward,'n_rewards_given')
 end
 
 if isfield(reward,'man_reward_ct')
-    T{curridx,19} = T{curridx,19} + reward.man_reward_ct;
+    T{curridx,19} = T{curridx,19} + reward.man_reward_ct * reward.reward_vol;
 end
 
 if isfield(reward,'bonus_reward_ct')
-    T{curridx,19} = T{curridx,19} + reward.bonus_reward_ct;
+    T{curridx,19} = T{curridx,19} + reward.bonus_reward_ct * reward.reward_vol;
 end
 
 if isfield(reward,'reward_type')
@@ -150,6 +171,34 @@ if isfield(reward,'lick_trial')
 end
 
 % number of successful image presentations
+% eye duration 
+eye_dur = calib.end_t - calib.start_t;
+
+% 
+n_imgs_seen = zeros(1,calib.n_completed); 
+if isfield(calib_settings,'n_rsvp')
+    if calib_settings.n_rsvp > 1
+        for n = 1:calib.n_completed
+            if calib.sequence(n) == 1
+                for nn = 1:calib_settings.n_rsvp
+                    if eye_dur(n) >= (round(calib_settings.presentation_time/1e3/(1/calib_settings.iti_frames(n)))-1)* 1/calib_settings.iti_frames(n)* nn +  (round(calib_settings.rsvp_iti_ms/1e3/(1/calib_settings.iti_frames(n)))-1)* 1/calib_settings.iti_frames(n) *(nn-1) 
+                        n_imgs_seen(n) = n_imgs_seen(n) + 1; 
+                    end
+                end
+            end
+        end
+    end
+end
+
+n_imgs_seen_session = sum(n_imgs_seen); 
+
+if T{curridx,11} >1
+    T{curridx,23} = n_imgs_seen_session;
+    T{curridx,24} = cumulative_n_imgs_seen + n_imgs_seen_session;
+else
+    T{curridx,23} = 0;
+    T{curridx,24} = cumulative_n_imgs_seen; 
+end
 
 T = cell2table(T); 
 T.Properties.VariableNames = columns;

@@ -195,17 +195,6 @@ if give_punishments
     punish_length_ms_draw = punish_length_ms;
 else
     punish_length_ms_draw = NaN;
-    
-if isfield(s,'wake_up_reward')
-    wake_up_reward = s.wake_up_reward;
-else
-    wake_up_reward = true; 
-end
-
-if isfield(s,'stimulus_pre_dot_stay_iti_rsvp')
-    stimulus_pre_dot_stay_iti_rsvp = s.stimulus_pre_dot_stay_iti_rsvp;
-else
-    stimulus_pre_dot_stay_iti_rsvp = false
 end
 
 %% rsvp setup
@@ -303,7 +292,8 @@ InitializePsychSound(1);
 esc_key = KbName('ESC');
 rew_end_key = KbName('r');
 bonus_rew_key = KbName('b'); 
-
+wake_up_movie_key = KbName('v'); 
+wake_up_movie_terminate_key = KbName('t'); 
 % setup eyetracker-related
 if strcmp(eye_method, 'rand') | strcmp(eye_method, 'mouse')
     use_vpx = false;
@@ -562,12 +552,10 @@ if strcmp(stim_mode,'smooth pursuit')
     
 end
 
-
 if strcmp(stim_mode, 'movie')
     moviefiles_all = dir(movie_folder);
     movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
     moviePtr = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64);
-    Screen('PlayMovie', moviePtr, movie_rate, 1);
 end
 
 % set up bounding boxes for display on the control screen
@@ -607,6 +595,17 @@ else
     tr_seq = repmat(1:n_calib_pts, 1, trs_per_location);
 end
 
+% wake_up movies (keyboard v) 
+if isfield(s,'wake_up_movie')
+    moviefiles_all = dir(s.wake_up_movie);
+    movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
+    moviePtr_wu = Screen('OpenMovie', win, fullfile(s.wake_up_movie, movienames{1}), [], 1, 64);
+    Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
+    
+    wu_movie_stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], x_cent,y_cent);
+end
+
+% wake_up images
 if wake_up_trials
     y = nan(1,n_trs_requested);
     z = [tr_seq; y];
@@ -622,19 +621,44 @@ if wake_up_trials
     n_wake_up_trs = sum(tr_seq == 0);
     wake_up_stim_frames = round(wake_up_tr_dur/ifi);
     % read images
-    wu_img_d = dir(wake_up_img_fold);
-    wu_img_d = wu_img_d(~[wu_img_d.isdir]);
-    wake_up_imgs = cell(1,numel(wu_img_d));
-    for i = 1:numel(wu_img_d)
-        wu_image_fname_list{i} = fullfile(wake_up_img_fold, wu_img_d(i).name);
-        [wu_img_tmp, ~,alpha] = imread(wu_image_fname_list{i});
-        if ~isempty(alpha)
-            wu_img_tmp(:,:,4) = alpha;
+    wu_image_fname_list = {}; 
+    if iscell(wake_up_img_fold)
+        wake_up_imgs = {}; 
+        for j = 1:length(wake_up_img_fold)
+            wu_img_d = dir(wake_up_img_fold{j});
+            wu_img_d = wu_img_d(~[wu_img_d.isdir]);
+            for i = 1:numel(wu_img_d)
+                wu_image_fname_list = [wu_image_fname_list,fullfile(wake_up_img_fold{j}, wu_img_d(i).name)];
+                [wu_img_tmp, ~,alpha] = imread(fullfile(wake_up_img_fold{j}, wu_img_d(i).name));
+                if ~isempty(alpha)
+                    wu_img_tmp(:,:,4) = alpha;
+                end
+                wake_up_imgs = [wake_up_imgs,wu_img_tmp];
+            end
         end
-        wake_up_imgs{i} = wu_img_tmp;
+        n_wu_imgs = numel(wake_up_imgs);
+        %wu_img_idx = randi(n_wu_imgs);
+        wu_idx = 1;
+    else
+        wu_img_d = dir(wake_up_img_fold);
+        wu_img_d = wu_img_d(~[wu_img_d.isdir]);
+        wake_up_imgs = cell(1,numel(wu_img_d));
+        for i = 1:numel(wu_img_d)
+            wu_image_fname_list{i} = fullfile(wake_up_img_fold, wu_img_d(i).name);
+            [wu_img_tmp, ~,alpha] = imread(wu_image_fname_list{i});
+            if ~isempty(alpha)
+                wu_img_tmp(:,:,4) = alpha;
+            end
+            wake_up_imgs{i} = wu_img_tmp;
+        end
+        n_wu_imgs = numel(wake_up_imgs);
+        %wu_img_idx = 1;
+        wu_idx = 1;
     end
-    n_wu_imgs = numel(wake_up_imgs);
-    wu_img_idx = 1;
+    
+    % wake up image sequence randomized
+    wu_seq = repmat(linspace(1,n_wu_imgs,n_wu_imgs),[1,ceil(n_wake_up_trs/n_wu_imgs)]);
+    wu_seq = wu_seq(randperm(length(wu_seq))); 
 else
     n_wake_up_trs = 0;
     n_trs_tot = n_trs_requested;
@@ -694,14 +718,32 @@ elseif strcmp(trial_mode, 'foraging')
 end
 
 % set up audio feedback
-if play_reward_sound
-    [aud_y, aud_fs] = audioread(reward_sound_file);
-end
+% if play_reward_sound
+%     [aud_y, aud_fs] = audioread(reward_sound_file);
+% end
+% 
+% if play_punish_sound
+%    [aud_pun_y, aud_pun_fs] = audioread(punish_sound_file);
+% end
 
-if play_punish_sound
-    [aud_pun_y, aud_pun_fs] = audioread(punish_sound_file);
-end
 
+%% Reward and Punish sound handles using PsychPortAudio
+audio_handle = [];
+% reward
+[aud_y, aud_fs] = psychwavread(reward_sound_file); 
+[samplecount,ninchannels] = size(aud_y); 
+aud_y = repmat(aud_y',2/ninchannels,1); 
+suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
+audio_handle(1) = PsychPortAudio('Open', 1, [], 1, aud_fs,2, [],suggestedLat);
+PsychPortAudio('FillBuffer', audio_handle(1), aud_y);
+
+% punish
+[aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file); 
+[samplecount,ninchannels] = size(aud_pun_y); 
+aud_pun_y = repmat(aud_pun_y',2/ninchannels,1); 
+audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
+PsychPortAudio('FillBuffer', audio_handle(2), aud_pun_y);
+%%
 %iti_frames = round(inter_stim_interval(1)/1e3/ifi);
 if iti_random
     iti_frames = round((rand(1,n_trs_tot)*diff(inter_stim_interval)+inter_stim_interval(1))/1e3/ifi);
@@ -766,6 +808,8 @@ reward_ct = 0;
 man_reward_ct = 0;
 bonus_reward_ct = 0; 
 bonus_reward_t = []; 
+wu_mov_start_t = [];
+wu_mov_end_t = []; 
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
@@ -898,9 +942,38 @@ for i = 1:n_trs_tot
                     bonus_reward_ct = bonus_reward_ct + 1;
                     pumpReward_updateGUI();
                     fprintf('bonus reward, time = %0.3fs\n', bonus_reward_t(end));
+                end    
+            elseif find(kCode) == wake_up_movie_key
+                wake_up_movie = 1; 
+                wu_mov_start_t(end+1) = GetSecs()-t_start_sec;
+                while wake_up_movie
+                    disp('wake_up_movie is playing') 
+                    Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
+                    
+                    [keyIsDown, ~, keyCode] = KbCheck(-1);
+                    if (keyIsDown==1 && keyCode(wake_up_movie_terminate_key))
+                        Screen('PlayMovie',moviePtr_wu,0); 
+                        wu_mov_end_t(end+1) = GetSecs()-t_start_sec; 
+                        break;
+                    end
+
+                    waitforimage = 1;
+                    movtex_new_wu = Screen('GetMovieImage', win, moviePtr_wu, waitforimage);
+                    %Screen('PlayMovie', movie, rate, 1, 1.0);
+                    if movtex_new_wu>0
+                        movtex_wu = movtex_new_wu;
+                    end
+
+                    if ctrl_screen
+                        Screen('DrawTexture', win_ctrl, movtex_wu, [],  wu_movie_stim_rect);
+                        Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
+                            dotsz, rgba_cols(:,end), [], 1);
+                    end
+                    Screen('DrawTexture', win, movtex_wu, [],  wu_movie_stim_rect)
+                    Screen('Flip',win);
                 end
+                wake_up_movie = 0; 
             end
-            
             
             if require_fix_tr_init && seqidx ~= 0
                 if location_require_quality
@@ -1115,6 +1188,7 @@ for i = 1:n_trs_tot
                         waitforimage = 0;
                         %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
                         movtex_new = Screen('GetMovieImage', win, moviePtr, waitforimage);
+                        %Screen('PlayMovie', movie, rate, 1, 1.0);
                         if movtex_new>0
                             movtex = movtex_new;
                         end
@@ -1147,12 +1221,13 @@ for i = 1:n_trs_tot
                 end
                 
             elseif seqidx == 0 % draw wakeup trial
-                
+                wu_img_idx = wu_seq(wu_idx); 
                 if isempty(wake_up_image_displayed{i})
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
                 end
                 
                 % stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
+                % randomly draw from a list of 
                 tex1 = Screen('MakeTexture', win, wake_up_imgs{wu_img_idx});
                 Screen('DrawTexture', win, tex1, [], stim_rect);
                 
@@ -1166,12 +1241,6 @@ for i = 1:n_trs_tot
                 %keyboard
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                         dotsz, rgba_cols(:,end), [], 1); end
-                
-                if stimulus_pre_dot_stay_iti_rsvp
-                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
-                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                end
-                
                 inter_rsvp_fr_ctr = inter_rsvp_fr_ctr + 1;
                 %inter_rsvp_fr_ctr
             end
@@ -1364,10 +1433,6 @@ for i = 1:n_trs_tot
                         reward_this_trial = false;
                     end
                     
-                    if seqidx == 0 && ~wake_up_reward
-                        reward_this_trial = false;
-                    end
-                    
                 elseif strcmp(trial_mode, 'foraging')
                     if rsvp_mode
                         if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
@@ -1412,8 +1477,10 @@ for i = 1:n_trs_tot
                     fprintf('****REWARD TRIAL %d\n', i);
                     
                     if play_reward_sound
-                        sound(aud_y, aud_fs);
+                        %sound(aud_y, aud_fs);
+                        t1 = PsychPortAudio('Start',audio_handle(1), [], 0,1);
                         %disp('sound played');
+                        %PsychPortAudio('Stop', audio_handle(1));
                     end
                     
                     if ~isempty(reward_pumphand)
@@ -1461,11 +1528,14 @@ for i = 1:n_trs_tot
                 end
             end
             
-            if give_punishments && (give_rewards && ~reward_this_trial) && seqidx ~= 0
+            if give_punishments && (give_rewards && ~reward_this_trial)
                 punish_trial(i) = true;
                 %fprintf('Punish on\n');
                 if play_punish_sound
-                    sound(aud_pun_y, aud_pun_fs);
+                    %sound(aud_pun_y, aud_pun_fs);
+                    t1 = PsychPortAudio('Start', audio_handle(2), 1, 0,1);
+                    %disp('sound played');
+                   % PsychPortAudio('Stop', audio_handle(2));
                 end
                 for p = 1:round(punish_length_ms/1e3/ifi)
                     Screen('FillRect', win, blackcol);
@@ -1484,9 +1554,13 @@ for i = 1:n_trs_tot
     end
     
     if seqidx == 0
-        wu_img_idx = wu_img_idx +1;
-        if wu_img_idx > n_wu_imgs
-            wu_img_idx = 1;
+%         wu_img_idx = wu_img_idx +1;
+%         if wu_img_idx > n_wu_imgs
+%             wu_img_idx = 1;
+%         end
+        wu_idx = wu_idx + 1;
+        if wu_idx > n_wu_imgs
+            wu_idx = 1;
         end
     end
     
@@ -1511,6 +1585,7 @@ end
 
 t2 = GetSecs;
 Screen('CloseAll');
+PsychPortAudio('Close'); 
 sca
 
 if trig_flag
@@ -1557,6 +1632,8 @@ calib.trial_init_timed_out = trial_init_timed_out;
 calib.n_wake_up_trs = n_wake_up_trs;
 calib.image_displayed = image_displayed;
 calib.wake_up_image_displayed = wake_up_image_displayed;
+calib.wake_up_movie_start_t = wu_mov_start_t;
+calib.wake_up_movie_end_t = wu_mov_end_t; 
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
@@ -1604,6 +1681,10 @@ calib_settings.wake_up_img_dir = wake_up_img_fold;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_x;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_y;
 calib_settings.wake_up_tr_dur = wake_up_tr_dur;
+
+if isfield(s,'wake_up_movie')
+    calib_settings.wake_up_movie = s.wake_up_movie;  
+end
 
 % offset in y
 calib_settings.gaze_center_adj_y = gaze_center_adj_y;
@@ -1731,7 +1812,6 @@ end
             case 'mouse'
                 [eyepos_x_tmp, eyepos_y_tmp] = GetMouse();
                 eye_data_qual = NaN;
-                eye_data_qual = 1;
         end
         eyetracker_qual(idx_all) = eye_data_qual;
         
