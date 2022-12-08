@@ -556,6 +556,7 @@ if strcmp(stim_mode, 'movie')
     moviefiles_all = dir(movie_folder);
     movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
     moviePtr = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64);
+    Screen('PlayMovie', moviePtr, movie_rate, 1);
 end
 
 % set up bounding boxes for display on the control screen
@@ -943,13 +944,15 @@ for i = 1:n_trs_tot
                     pumpReward_updateGUI();
                     fprintf('bonus reward, time = %0.3fs\n', bonus_reward_t(end));
                 end    
-            elseif find(kCode) == wake_up_movie_key
+            elseif any(find(kCode) == wake_up_movie_key) && isfield(s,'wake_up_movie') 
                 wake_up_movie = 1; 
                 wu_mov_start_t(end+1) = GetSecs()-t_start_sec;
                 while wake_up_movie
                     disp('wake_up_movie is playing') 
+                    drawInfoText();
+                    checkLick(); 
                     Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
-                    
+                    [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
                     [keyIsDown, ~, keyCode] = KbCheck(-1);
                     if (keyIsDown==1 && keyCode(wake_up_movie_terminate_key))
                         Screen('PlayMovie',moviePtr_wu,0); 
@@ -971,6 +974,7 @@ for i = 1:n_trs_tot
                     end
                     Screen('DrawTexture', win, movtex_wu, [],  wu_movie_stim_rect)
                     Screen('Flip',win);
+                    Screen('Flip', win_ctrl);
                 end
                 wake_up_movie = 0; 
             end
