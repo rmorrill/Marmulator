@@ -88,7 +88,8 @@ if isfield(calib_settings,'expt_params')
     else
         if isfield(calib_settings,'bounding_rect_size_x')
             T{curridx,10}  = [calib_settings.bounding_rect_size_x,calib_settings.bounding_rect_size_y];
-        else
+        elseif isfield(calib_settings,'bounding_box_x')
+            T{curridx,10} = [calib_settings.bounding_box_x,calib_settings.bounding_box_y]; 
             
         end
     end
@@ -140,6 +141,8 @@ elseif isfield(reward,'n_reward_given') % previous Marmulator version
     T{curridx,16} = reward.n_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze
 elseif isfield(reward,'nr_rewards_given')
     T{curridx,16} = reward.nr_rewards_given; 
+else
+    T{curridx,16} = nan; 
 end
 
 
