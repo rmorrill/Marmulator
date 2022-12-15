@@ -1329,7 +1329,8 @@ if ~handles.lick_arduino_connected
         read_lick_cmd = gen_lickometer_command(lick_arduino); 
         lick_box_hand = handles.lick_box; 
         timer_period = 0.05;
-        t = timer('TimerFcn', {@checkLickometer_gui, ahand, read_lick_cmd, lick_box_hand}, 'Period', timer_period, 'ExecutionMode', 'fixedDelay');        
+        t = timer('TimerFcn', {@checkLickometer_gui, ahand, read_lick_cmd, lick_box_hand}, 'Period', timer_period, 'ExecutionMode', 'fixedDelay',...
+            'Name', 'lickometer_gui_timer', 'ErrorFcn', @timerErrorFcn_gui);        
         handles.gui_lick_timer = t;
         start(handles.gui_lick_timer); 
     else
@@ -1338,13 +1339,13 @@ if ~handles.lick_arduino_connected
         handles.lick_arduino_connected = 0;
     end
 else
-    try 
-        stop(handles.gui_lick_timer); 
-        delete(handles.gui_lick_timer); 
-    catch 
+    try
+        stop(handles.gui_lick_timer);
+        delete(handles.gui_lick_timer);
+        IOPort('Flush', handles.lick_arduino.ahand);
+        IOPort('Close', handles.lick_arduino.ahand);
+    catch
     end
-    IOPort('Flush', handles.lick_arduino.ahand); 
-    IOPort('Close', handles.lick_arduino.ahand);    
     set(handles.lick_arduino_com_edit, 'enable', 'on');
     set(gcbo, 'String', 'Connect');
     handles.lick_arduino_connected = 0;

@@ -278,7 +278,7 @@ end
 %%
 eye_rect = [0 0 1 1] ;
 eye = 0; % eye A
-rect_col = [255 0 0];
+
 
 good_pts = [];
 good_pts_cols = [];
@@ -390,6 +390,9 @@ Screen('Preference', 'TextRenderer', 0);
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
 graycol = (whitecol + blackcol)/2;
+
+rect_col = [255 0 0]; 
+rect_col = graycol; 
 
 switch bg_col
     case 'gray'
@@ -557,6 +560,7 @@ if strcmp(stim_mode, 'movie')
     movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
     moviePtr = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64);
     Screen('PlayMovie', moviePtr, movie_rate, 1);
+    WaitSecs(1); 
 end
 
 % set up bounding boxes for display on the control screen
@@ -1211,12 +1215,16 @@ for i = 1:n_trs_tot
                     case 'rectangle'
                         Screen('FillRect', win, rect_col, stim_rect);
                         %Screen('DrawDots', win, all_pts(seqidx,:), 5, blackcol, [], 1);
-                        if ctrl_screen; Screen('FillRect', win_ctrl, rect_col, stim_rect); end
+                        if ctrl_screen 
+                            Screen('FillRect', win_ctrl, rect_col, stim_rect);
+                            Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
+                                dotsz, rgba_cols(:,end), [], 1);
+                        end
                         %Screen('DrawDots', win_ctrl, all_pts(seqidx,:), 5, blackcol, [], 1)
                         %                         if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                         %                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         %                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                        %                         end
+                        %                         end   
                 end
                 
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
@@ -1243,6 +1251,11 @@ for i = 1:n_trs_tot
             elseif inter_rsvp
                 %sca
                 %keyboard
+                if stimulus_pre_dot && ~stimulus_pre_dot_disappear
+                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1); end
+                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                end
+                
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                         dotsz, rgba_cols(:,end), [], 1); end
                 inter_rsvp_fr_ctr = inter_rsvp_fr_ctr + 1;
