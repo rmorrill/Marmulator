@@ -1,8 +1,9 @@
 %%%% DATA LOAD 
 
 close all; 
-session_file = 'calib_West_2022-12-15_14-51-44.mat';  
-session_data_dir = 'C:\Data\West\2022-12-15\calibration\';  
+%session_file = 'calib_West_2022-12-18_14-18-16.mat'; 
+session_file = 'calib_West_2022-12-28_13-22-26.mat'; 
+session_data_dir = 'C:\Data\West\2022-12-28\calibration\';  
 
 %%
 %%%% CALIBARTION SETTINGS 
