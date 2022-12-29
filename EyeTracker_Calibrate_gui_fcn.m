@@ -1476,7 +1476,8 @@ for i = 1:n_trs_tot
                     if lick_flag
                         %%% check trials since last lick
                         if isnan(rew_trs_since_lick) && ~lick_trial(i)
-                            rew_trs_since_lick  = i; 
+                            %rew_trs_since_lick  = i; 
+                            rew_trs_since_lick = sum(correct_trial); 
                         elseif lick_trial(i)
                             rew_trs_since_lick = 0;
                         elseif i == 1 && ~lick_trial(i)
