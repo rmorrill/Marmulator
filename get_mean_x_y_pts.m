@@ -1,4 +1,4 @@
-function get_mean_x_y_pts(filepath)
+function [offset_x, offset_y] = get_mean_x_y_pts(filepath)
     %eye_data_dir = 'C:\MATLAB\eyetracker_calibration_071222\calib_data';
     %eye_data_file = 'calib_TEST_2022-09-13_14-24-52.mat'; 
     %eye_data_file = 'calib_Blizzard_2022-09-13_15-22-14.mat'; 
@@ -113,49 +113,53 @@ function get_mean_x_y_pts(filepath)
 
     %%
 
-    figure('Color', 'w', 'Position', [438   408   492   767]); 
-
-
+    figure('Color', 'w', 'Position', [438   408   492   767]);
+    
+    
     x_mu = mean(use_pts(:,1));
     y_mu = mean(use_pts(:,2));
     x_mu = median(use_pts(:,1));
     y_mu = median(use_pts(:,2));
-
-
+    
+    
     bins = linspace(0,1, 101);
     bincents = diff(bins)/2 + bins(1:end-1);
-    x_n = histcounts(use_pts(:,1), bins); 
-    y_n = histcounts(use_pts(:,2), bins); 
-
-    subplot(2,1,1); 
-    bar(bincents, x_n); 
-    yL = get(gca, 'YLim'); 
+    x_n = histcounts(use_pts(:,1), bins);
+    y_n = histcounts(use_pts(:,2), bins);
+    
+    subplot(2,1,1);
+    bar(bincents, x_n);
+    yL = get(gca, 'YLim');
     hold on
-    ylabel('counts'); 
-    xlabel('x location'); 
-    plot([x_mu, x_mu], yL, 'r-'); 
-    title(sprintf('mean x: %0.3f', x_mu)); 
-    set(gca, 'FontSize', 14); 
+    ylabel('counts');
+    xlabel('x location');
+    plot([x_mu, x_mu], yL, 'r-');
+    title(sprintf('mean x: %0.3f', x_mu));
+    set(gca, 'FontSize', 14);
     box off
-
-    subplot(2,1,2); 
-    bar(bincents, y_n); 
+    
+    subplot(2,1,2);
+    bar(bincents, y_n);
     hold on
-    yL = get(gca, 'YLim'); 
-    plot([y_mu, y_mu], yL, 'r-'); 
-    ylabel('counts'); 
-    xlabel('y location'); 
-    title(sprintf('mean y: %0.3f', y_mu)); 
-    set(gca, 'FontSize', 14); 
+    yL = get(gca, 'YLim');
+    plot([y_mu, y_mu], yL, 'r-');
+    ylabel('counts');
+    xlabel('y location');
+    title(sprintf('mean y: %0.3f', y_mu));
+    set(gca, 'FontSize', 14);
     box off
-
+    
     center_pt_x_pix = (E.calib_settings.gaze_center_adj_x + E.calib_settings.disp_rect(3)/2);
     center_pt_y_pix = (E.calib_settings.gaze_center_adj_y + E.calib_settings.disp_rect(4)/2);
-    center_pt_x = center_pt_x_pix/E.calib_settings.disp_rect(3); 
-    center_pt_y = center_pt_y_pix/E.calib_settings.disp_rect(4); 
+    center_pt_x = center_pt_x_pix/E.calib_settings.disp_rect(3);
+    center_pt_y = center_pt_y_pix/E.calib_settings.disp_rect(4);
+    
+    fprintf('gaze center pt x: %d pix, %0.3f on screen\n', center_pt_x_pix, center_pt_x);
+    fprintf('gaze center pt y: %d pix, %0.3f on screen\n\n', center_pt_y_pix, center_pt_y);
+    offset_x = center_pt_x-x_mu;
+    offset_y = center_pt_y-y_mu;
+    fprintf('offset x: %0.3f\n', offset_x);
+    fprintf('offset y: %0.3f\n', offset_y);
+    
 
-    fprintf('gaze center pt x: %d pix, %0.3f on screen\n', center_pt_x_pix, center_pt_x); 
-    fprintf('gaze center pt y: %d pix, %0.3f on screen\n\n', center_pt_y_pix, center_pt_y); 
-    fprintf('offset x: %0.3f\n', center_pt_x-x_mu); 
-    fprintf('offset y: %0.3f\n', center_pt_y-y_mu); 
 end

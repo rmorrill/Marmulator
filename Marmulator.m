@@ -332,7 +332,7 @@ if ~isempty(ra)
 end
  
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
-EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
+[~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
@@ -347,10 +347,33 @@ if ~isempty(handles.subject_file)
 end
 
 if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'off')
-   start(handles.gui_lick_timer); 
+    start(handles.gui_lick_timer);
 end
 
-guidata(hObject, handles); 
+guidata(hObject, handles);
+
+
+if calib.n_completed > 3
+    try
+        if contains(handles.params.save_params_name,'center_point')
+            questans = questdlg('Would you like to run center point estimation?', 'Center point', 'Yes', 'No', 'Yes');
+            if strcmp(questans, 'Yes')
+                [offset_x, offset_y] = get_mean_x_y_pts(save_full);
+            else
+                fprintf('Will not run center point estimation\nTo run manually use get_mean_x_y_pts.m\n');
+            end
+        else
+            questans = questdlg('Would you like to run multi-point calibration?', 'Run calibration', 'Yes', 'No', 'Yes');
+            if strcmp(questans, 'Yes')
+                eyetracker_calibration_fcn(save_full)
+            else
+                fprintf('Will not run center point estimation\nTo run manually use get_mean_x_y_pts.m\n');
+            end
+        end
+    catch me
+        disp('Attempted to run calibration functions, but an error occurred');
+    end
+end
 
 %f = parfeval(@EyeTracker_Calibrate_gui_fcn, 1, ra, handles.reward_pin, handles.subject,...
 %    handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
@@ -670,7 +693,23 @@ function browse_calib_push_Callback(hObject, eventdata, handles)
 % hObject    handle to browse_calib_push (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-[fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load calibration file',handles.default_calib_dir); 
+
+start_calib_dir = [];  
+if isfield(handles, 'subject') && ~isempty(handles.subject) 
+    subj = handles.subject; 
+    thisdatestr = datestr(now, 'yyyy-mm-dd'); 
+    start_calib_dir = fullfile(handles.default_calib_dir, subj, thisdatestr, 'calibration', 'calib_coeffs'); 
+    if ~exist(start_calib_dir, 'dir') 
+        start_calib_dir = fullfile(handles.default_calib_dir, subj); 
+    end
+end
+
+if exist(start_calib_dir, 'dir')
+    [fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load calibration file',start_calib_dir);
+else
+    [fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load calibration file',handles.default_calib_dir);
+end
+
 %keyboard
 if ~isempty(fname_tmp) && all(fname_tmp ~= 0)
     handles.calib_file = fullfile(pname_tmp, fname_tmp);
