@@ -1,5 +1,5 @@
 
-function [eyetrack, calib] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
+function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
     subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
@@ -1690,13 +1690,14 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 %% execute plots automatically
 
-try
-    if contains(calib_settings.expt_params,'center_point')
-        get_mean_x_y_pts(fullfile(save_data_dir, savefname))
-    end
-catch me
-    disp('Attempted to run get_mean_x_y_pts.m'); 
-end
+save_full = fullfile(save_data_dir, savefname); 
+% try
+%     if contains(calib_settings.expt_params,'center_point')
+%         get_mean_x_y_pts(fullfile(save_data_dir, savefname))
+%     end
+% catch me
+%     disp('Attempted to run get_mean_x_y_pts.m'); 
+% end
 
 %%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
     function [eyeposx_cur, eyeposy_cur, eye_data_qual] = get_eyetracker_draw_dots()
