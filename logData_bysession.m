@@ -134,8 +134,6 @@ if isfield(calib_settings,'require_fix_tr_init')
     end
 end
 
-valid_trial_ind = calib.sequence~=0; 
-
 if datetime(date_session) < datetime('2022-10-01')
     T{curridx,15} = calib.n_completed;
 else
