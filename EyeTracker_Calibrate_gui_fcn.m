@@ -4,7 +4,7 @@ function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pump
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, lick_arduino, reward_type, setup_config)
+    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str)
 %keyboard
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -1652,6 +1652,7 @@ calib.image_displayed = image_displayed;
 calib.wake_up_image_displayed = wake_up_image_displayed;
 calib.wake_up_movie_start_t = wu_mov_start_t;
 calib.wake_up_movie_end_t = wu_mov_end_t; 
+calib.training_notes_objectives = training_notes_str; 
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
