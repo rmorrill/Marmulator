@@ -134,11 +134,19 @@ if isfield(calib_settings,'require_fix_tr_init')
     end
 end
 
-T{curridx,15} = calib.n_completed;
+valid_trial_ind = calib.sequence~=0; 
+
+if datetime(date_session) < datetime('2022-10-01')
+    T{curridx,15} = calib.n_completed;
+else
+    finished_sequence = calib.sequence(1:calib.n_completed);
+    T{curridx,15} = sum(finished_sequence~=0);
+end
+
 if isfield(reward,'correct_trial')
-    T{curridx,16} = sum(reward.correct_trial); % correct trials
-elseif isfield(reward,'n_reward_given') % previous Marmulator version
-    T{curridx,16} = reward.n_rewards_given - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze
+    T{curridx,16} = sum(reward.correct_trial(calib.sequence~=0)); % correct trials
+elseif isfield(reward,'n_rewards_given')  % previous Marmulator version
+    T{curridx,16} = sum(reward.reward_sequence(calib.sequence~=0)) - sum(reward.reward_sequence == 1 &  calib.trial_init_timed_out ==1);  % remove trials that froze
 elseif isfield(reward,'nr_rewards_given')
     T{curridx,16} = reward.nr_rewards_given; 
 else
@@ -170,7 +178,9 @@ end
 T{curridx,21} = cumulative_reward+ T{curridx,19}; 
 
 if isfield(reward,'lick_trial')
-    T{curridx,22} = sum(reward.lick_trial);
+    if reward.lickometer == 1
+        T{curridx,22} = sum(reward.lick_trial);
+    end
 end
 
 % number of successful image presentations
