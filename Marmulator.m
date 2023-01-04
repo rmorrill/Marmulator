@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 14-Nov-2022 16:06:46
+% Last Modified by GUIDE v2.5 04-Jan-2023 14:04:51
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -331,6 +331,9 @@ if ~isempty(ra)
     end
 end
  
+
+training_notes_str = get(handles.notes_edit, 'String'); 
+
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 [~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
@@ -338,7 +341,7 @@ set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.s
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
     handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
-    handles.setup_config);
+    handles.setup_config, training_notes_str);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -1418,3 +1421,28 @@ function reward_popup_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
+
+
+
+function notes_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to notes_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of notes_edit as text
+%        str2double(get(hObject,'String')) returns contents of notes_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function notes_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to notes_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
