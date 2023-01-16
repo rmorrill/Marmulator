@@ -245,6 +245,11 @@ if isfield(s, 'wake_up_trials')
     wake_up_img_fold = s.wake_up_img_fold;
     wake_up_stim_size_x = s.wake_up_stim_size_x;
     wake_up_stim_size_y = s.wake_up_stim_size_y;
+    if isfield(s,'wake_up_reward')
+        wake_up_reward = s.wake_up_reward;
+    else
+        wake_up_reward = 1;
+    end
 else
     wake_up_trials = false;
     wake_up_every = [];
@@ -836,6 +841,7 @@ for i = 1:n_trs_tot
     pre_stim_timer = 0;
     manual_reward_flag = false;
     entered_bb = false; % did eye go into bb?
+    skip_reward = 0; 
     
     
     if seqidx ~= 0
@@ -851,6 +857,10 @@ for i = 1:n_trs_tot
         stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], xcurr, ycurr);
         curr_bb = stim_rect;
         curr_bb_stim_pre_dot = stim_rect;
+        
+        if wake_up_reward == 0
+            skip_reward = 1;
+        end
     end
     
     idx_all = idx_all +1;
@@ -1248,6 +1258,7 @@ for i = 1:n_trs_tot
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur],...
                         dotsz, rgba_cols(:,end), [], 1);
                 end
+                
             elseif inter_rsvp
                 %sca
                 %keyboard
@@ -1436,7 +1447,7 @@ for i = 1:n_trs_tot
                 IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
             end
             
-            if give_rewards
+            if give_rewards && ~skip_reward
                 if strcmp(trial_mode, 'trial') || seqidx == 0
                     if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
                         frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
@@ -1546,7 +1557,7 @@ for i = 1:n_trs_tot
                 end
             end
             
-            if give_punishments && (give_rewards && ~reward_this_trial)
+            if give_punishments && (give_rewards && ~reward_this_trial) && ~skip_reward
                 punish_trial(i) = true;
                 %fprintf('Punish on\n');
                 if play_punish_sound
@@ -1567,7 +1578,7 @@ for i = 1:n_trs_tot
                     vbl = Screen('Flip', win, vbl + halfifi);
                     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl + halfifi); end
                 end
-            end
+            end       
         end
     end
     
