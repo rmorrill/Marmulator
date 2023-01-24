@@ -785,12 +785,19 @@ calib_st_t = nan(1,n_trs_tot);
 calib_end_t = nan(1,n_trs_tot);
 
 % trial sequence
-clip_sequence = {'fixation pt','stimulus'}; 
-if require_fix_tr_init == 1
-    clip_sequence_t = [0,fixation_to_init];
+if stimulus_pre_dot 
+    clip_sequence = {'fixation pt','stimulus'}; 
+    if require_fix_tr_init == 1
+        clip_sequence_t = [0,fixation_to_init];
+    else
+       clip_sequence_t = [0, stimulus_pre_time];
+    end
+
 else
-   clip_sequence_t = [0, stimulus_pre_time];
+    clip_sequence = {'stimulus'}; 
+    clip_sequence_t = [0]; 
 end
+
 
 if rsvp_mode
     for i = 1:n_rsvp
@@ -808,7 +815,7 @@ else
     clip_sequence = [clip_sequence,'trial_end']; 
 end
 
-calib_st_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
+calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
     
 if strcmp(stim_mode,'spinning')
     tr_seq = nan(n_calib_pts,n_trs_tot);
@@ -939,7 +946,7 @@ for i = 1:n_trs_tot
     blink_ctr = 0;
     trial_trig_hi = 0;
     sc_trig_hi = 0; 
-    
+
     % ENTER STIMULUS PRE
     if stimulus_pre_dot
         stps = GetSecs();
@@ -960,7 +967,7 @@ for i = 1:n_trs_tot
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1); end
                 Screen('DrawDots', win, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1);
             end
-            
+            calib_t_clip(i,1) = GetSecs() - t_start_sec; 
             vbl = Screen('Flip', win, vbl + halfifi);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi); end
             
@@ -1710,7 +1717,7 @@ calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
 calib.time_to_bounding_box = time_to_bb;
 calib.sequence = tr_seq;
-calib.clip_sequence_start_t = calib_st_t_clip; 
+calib.clip_sequence_start_t = calib_t_clip; 
 calib.trial_mode = trial_mode;
 calib.reward_on = reward_on;
 calib.time_to_reward = time_to_reward;
