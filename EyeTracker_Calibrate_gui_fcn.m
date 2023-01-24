@@ -48,7 +48,7 @@ end
 if ~isempty(trigger_arduino)
     trig_hand = trigger_arduino.ahand;
     trig_flag = true;
-    [sess_trig_cmd, trial_trig_cmd, stim_trig_cmd] = gen_trig_commands(trigger_arduino);
+    [sess_trig_cmd, trial_trig_cmd, stim_trig_cmd,sc_trig_cmd] = gen_trig_commands(trigger_arduino);
     % ensure that everything is off
     % turn off session trigger
     IOPort('Write', trig_hand, sess_trig_cmd.off, 1);
@@ -57,6 +57,8 @@ if ~isempty(trigger_arduino)
     WaitSecs(0.05);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
     WaitSecs(0.05);
+    IOPort('Write', trig_hand, sc_trig_cmd.off, 1); 
+    WaitSecs(0.05); 
 else
     trig_flag = false;
     fprintf('WARNING: NO TRIGGER ARDUINO HANDLE PROVIDED!\nTriggers will not be recorded\n');  
@@ -94,9 +96,6 @@ save_params_here = s.save_params_here;
 eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
 window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
-%screen_dist_cm = s.screen_dist_cm;
-%screen_width_cm = s.screen_width_cm;
-%screen_ht_cm = s.screen_ht_cm;
 screenid_stim = setup_config.screenid_stim;
 screenid_ctrl = setup_config.screenid_ctrl;
 calibration_win_len = s.calibration_win_len;
@@ -394,6 +393,8 @@ Screen('Preference', 'TextRenderer', 0);
 % get colors
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
+whitecol_interrsvp = whitecol *0.8; 
+blackcol_interrsvp = whitecol * 0.2; 
 graycol = (whitecol + blackcol)/2;
 
 rect_col = [255 0 0]; 
@@ -783,6 +784,32 @@ trial_init_timed_out = false(1,n_trs_tot);
 calib_st_t = nan(1,n_trs_tot);
 calib_end_t = nan(1,n_trs_tot);
 
+% trial sequence
+clip_sequence = {'fixation pt','stimulus'}; 
+if require_fix_tr_init == 1
+    clip_sequence_t = [0,fixation_to_init];
+else
+   clip_sequence_t = [0, stimulus_pre_time];
+end
+
+if rsvp_mode
+    for i = 1:n_rsvp
+        if i == n_rsvp
+            clip_sequence_t = [clip_sequence_t,clip_sequence_t(2) + rsvp_iti_t*(i-1) + presentation_time*i];
+            clip_sequence = [clip_sequence,'trial_end']; 
+        else
+              clip_sequence_t = [clip_sequence_t,clip_sequence_t(2) + rsvp_iti_t*(i-1) + presentation_time*i,...
+            clip_sequence_t(2) + rsvp_iti_t*i + presentation_time*i];
+            clip_sequence = [clip_sequence,'blank','stimulus']; 
+        end
+    end
+else
+    clip_sequence_t = [clip_sequence_t,presentation_time]; 
+    clip_sequence = [clip_sequence,'trial_end']; 
+end
+
+calib_st_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
+    
 if strcmp(stim_mode,'spinning')
     tr_seq = nan(n_calib_pts,n_trs_tot);
     
@@ -837,6 +864,7 @@ for i = 1:n_trs_tot
     seqidx = tr_seq(i);
     stfridx = 0;
     rsvpfridx = 0;
+    interrsvpfridx = 0; 
     loop_brk_ctr = 0;
     pre_stim_timer = 0;
     manual_reward_flag = false;
@@ -910,6 +938,7 @@ for i = 1:n_trs_tot
     fix_pre_fr_ctr = 0;
     blink_ctr = 0;
     trial_trig_hi = 0;
+    sc_trig_hi = 0; 
     
     % ENTER STIMULUS PRE
     if stimulus_pre_dot
@@ -1003,6 +1032,11 @@ for i = 1:n_trs_tot
                 if curr_in_bb  && qual_check
                     fix_pre_fr_ctr = fix_pre_fr_ctr + 1;
                     blink_ctr = 0;
+                    % sample command trigger starts
+                    if trig_flag && ~sc_trig_hi
+                        IOPort('Write', trig_hand, sc_trig_cmd.on, 1);
+                        sc_trig_hi = 1;
+                    end
                 elseif (~curr_in_bb || ~qual_check) && fix_pre_fr_ctr>3 && blink_ctr<n_frames_blink
                     blink_ctr = blink_ctr + 1;
                 else
@@ -1060,6 +1094,7 @@ for i = 1:n_trs_tot
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames
             % go into a break
             inter_rsvp = true;
+            interrsvpfridx = interrsvpfridx + 1; 
         else
             inter_rsvp = false;
             rsvpfridx = rsvpfridx + 1;
@@ -1151,6 +1186,7 @@ for i = 1:n_trs_tot
                         
                         stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                         Screen('DrawTexture', win, tex1, [], stim_rect_curr)
+                        
                         if ctrl_screen
                             tex2 = Screen('MakeTexture', win_ctrl, imgs{img_idx});
                             Screen('DrawTexture', win_ctrl, tex2, [], stim_rect_curr)
@@ -1286,6 +1322,8 @@ for i = 1:n_trs_tot
                 if rsvp_mode
                     if curr_in_bb && qual_check
                         rsvp_break_ctr = 0;
+                        % sample command trigger starts
+                        
                     elseif (~curr_in_bb || ~qual_check)
                         rsvp_break_ctr = rsvp_break_ctr + 1;
                         %rsvp_break_ctr
@@ -1314,19 +1352,31 @@ for i = 1:n_trs_tot
                 end
             end
             
-            if photodiode_flash && ~inter_rsvp
-                if rsvp_mode
+            if photodiode_flash % per elias' request, show photodiode square during inter_rsvp 
+                if rsvp_mode && ~inter_rsvp
                     whichflash = mod(rsvpfridx, 2);
+                elseif rsvp_mode && inter_rsvp
+                    whichflash = mod(interrsvpfridx,2);
                 else
                     whichflash = mod(stfridx, 2);
                 end
                 
                 if whichflash
-                    Screen('FillRect', win, whitecol, flash_rect);
-                    Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                    if ~inter_rsvp
+                        Screen('FillRect', win, whitecol, flash_rect);
+                        Screen('FillRect', win_ctrl, whitecol, flash_rect);
+                    else
+                        Screen('FillRect', win, whitecol_interrsvp, flash_rect);
+                        Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect);
+                    end
                 else
-                    Screen('FillRect', win, blackcol, flash_rect);
-                    Screen('FillRect', win_ctrl, blackcol, flash_rect);
+                    if ~inter_rsvp
+                        Screen('FillRect', win, blackcol, flash_rect);
+                        Screen('FillRect', win_ctrl, blackcol, flash_rect);
+                    else
+                        Screen('FillRect', win, blackcol_interrsvp, flash_rect);
+                        Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect);
+                    end
                 end
             end
             
@@ -1512,6 +1562,11 @@ for i = 1:n_trs_tot
                         %PsychPortAudio('Stop', audio_handle(1));
                     end
                     
+                    if trig_flag && sc_trig_hi
+                       IOPort('Write', trig_hand, sc_trig_cmd.off, 1);
+                       sc_trig_hi = 0;
+                    end
+                    
                     if ~isempty(reward_pumphand)
                         if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
                             reward_time(i) = GetSecs()-t_start_sec;
@@ -1578,6 +1633,11 @@ for i = 1:n_trs_tot
                     vbl = Screen('Flip', win, vbl + halfifi);
                     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl + halfifi); end
                 end
+                
+                if trig_flag && sc_trig_hi
+                   IOPort('Write', trig_hand, sc_trig_cmd.off, 1);
+                   sc_trig_hi = 0;
+                end
             end       
         end
     end
@@ -1625,6 +1685,7 @@ if trig_flag
     % ensure everything else is off
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+    IOPort('Write', trig_hand, sc_trig_cmd.off,1); 
 end
 
 if profile_memory
@@ -1649,6 +1710,7 @@ calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
 calib.time_to_bounding_box = time_to_bb;
 calib.sequence = tr_seq;
+calib.clip_sequence_start_t = calib_st_t_clip; 
 calib.trial_mode = trial_mode;
 calib.reward_on = reward_on;
 calib.time_to_reward = time_to_reward;
@@ -1667,6 +1729,7 @@ calib.training_notes_objectives = training_notes_str;
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
+calib_settings.rsvp_break_after_t = rsvp_break_after_t;
 calib_settings.inter_stim_interval = inter_stim_interval;
 calib_settings.iti_random = iti_random;
 calib_settings.iti_frames = iti_frames;
@@ -1711,6 +1774,9 @@ calib_settings.wake_up_img_dir = wake_up_img_fold;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_x;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_y;
 calib_settings.wake_up_tr_dur = wake_up_tr_dur;
+calib_settings.photodiode_on = photodiode_flash; 
+calib_settings.photodiode_sz = flash_rect_size; 
+calib_settings.photodiode_pos = [flash_rect(1),flash_rect(2)]; 
 
 if isfield(s,'wake_up_movie')
     calib_settings.wake_up_movie = s.wake_up_movie;  
@@ -1724,6 +1790,8 @@ calib_settings.apply_gaze_center_adj = apply_gaze_center_adj;
 calib_settings.require_fix_tr_init = require_fix_tr_init;
 calib_settings.fixation_to_init = fixation_to_init;
 calib_settings.time_out_trial_init_s = time_out_trial_init_s;
+calib_settings.clip_sequence = clip_sequence;
+calib_settings.clip_sequence_t = clip_sequence_t; 
 
 eyetrack.time = eyetracker_time;
 eyetrack.x = eyepos_x;
@@ -1753,6 +1821,11 @@ settings.time_save = datestr(now, 'yyyy-dd-mm_HH-MM-SS');
 settings.time_start = session_time;
 settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
+settings.screenScale = setup_config.screenScale;
+settings.screenPixels = setup_config.screenPixels; 
+settings.screenInches = setup_config.screenInches;
+settings.viewportPPI = setup_config.viewportPPI; 
+settings.deviceBrand = setup_config.deviceBrand; 
 
 reward.give_rewards = true;
 reward.reward_type = reward_type; 

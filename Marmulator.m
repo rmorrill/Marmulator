@@ -1299,6 +1299,7 @@ if ~handles.trig_arduino_connected
         trigger_arduino.session_pin = 4; 
         trigger_arduino.trial_pin = 7; 
         trigger_arduino.stim_pin = 10; 
+        trigger_arduino.sc_pin = 12; 
         assign_trigger_pins(trigger_arduino); 
         handles.trigger_arduino = trigger_arduino;
         handles.trigger_arduino_comport = port; 
