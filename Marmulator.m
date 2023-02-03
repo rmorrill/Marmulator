@@ -77,6 +77,7 @@ else
     handles.setup_config = sc; 
     handles.reward_list = [get(handles.reward_popup, 'String') sc.reward_types]; 
     set(handles.reward_popup, 'String', handles.reward_list); 
+    handles.sc = sc; 
 end
 
 logo_file = fullfile(handles.base_dir, 'gui', 'marmulator_logo.png'); 
@@ -1295,11 +1296,14 @@ if ~handles.trig_arduino_connected
         set(gcbo, 'String', 'Disconnect');
         set(handles.trig_arduino_com_edit, 'enable', 'off');
         handles.trig_arduino_connected = 1;
-        % MAKE THESE PART OF SETUP SOON 
-        trigger_arduino.session_pin = 4; 
-        trigger_arduino.trial_pin = 7; 
-        trigger_arduino.stim_pin = 10; 
-        trigger_arduino.sc_pin = 12; 
+        trigger_arduino.session_pin = handles.sc.session_pin; 
+        trigger_arduino.trial_pin = handles.sc.trial_pin; 
+        trigger_arduino.stim_pin = handles.sc.stim_pin; 
+        if isfield(handles.sc,'sampleCommand_pin') 
+            trigger_arduino.sampleCommand_pin = handles.sc.sampleCommand_pin; 
+        else
+            trigger_arduino.sampleCommand_pin = []; 
+        end
         assign_trigger_pins(trigger_arduino); 
         handles.trigger_arduino = trigger_arduino;
         handles.trigger_arduino_comport = port; 
