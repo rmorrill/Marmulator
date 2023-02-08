@@ -3,7 +3,8 @@
 ## Task modes
 
 ### Fixation experiment mode
-Trials (typically) require fixation to start, and successful completion requires maintenance of fixation in a bounding box.  
+Trials (typically) require fixation to start, and successful completion requires maintenance of fixation in a bounding box.
+This is automatically turned on when n_rsvp is set to >1 OR when fixation_exp_mode is set to TRUE. 
 Relevant task variables: 
 
 ### Forage mode
