@@ -10,12 +10,14 @@ profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
 
+%fix_exp_mode = true; % fixation experiment mode 
+
 newPriority = 1; 
 oldPriority = Priority(newPriority); 
 fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
 
 % mkTurk_data_save_flag
-mkTurk_data_save = 1; 
+mkTurk_data_save = 0; 
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -212,14 +214,9 @@ else
     stimulus_pre_dot_disappear = 0;
 end
 
-if give_punishments
-    punish_length_ms_draw = punish_length_ms;
-else
-    punish_length_ms_draw = NaN;
-end
 
-%% rsvp setup
-% rsvp will use presentation time for each stimulus duration
+%% fixation mode/rsvp setup
+% fix mode will use presentation time for each stimulus duration
 if isfield(s, 'rsvp_iti_t')
     rsvp_iti_t = s.rsvp_iti_t;
 else
@@ -230,11 +227,22 @@ if isempty(n_rsvp) || isnan(n_rsvp)
     n_rsvp = 1;
 end
 
-if n_rsvp>1
-    rsvp_mode = true;
+if isfield(s, 'fixation_exp_mode')
+    fix_exp_mode = s.fixation_exp_mode;
 else
-    rsvp_mode = false;
+    if n_rsvp>1
+        fix_exp_mode = true;
+    else
+        fix_exp_mode = false;
+    end
 end
+
+if give_punishments
+    punish_length_ms_draw = punish_length_ms;
+else
+    punish_length_ms_draw = NaN;
+end
+
 
 %image_order = 'random';
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1);
@@ -246,18 +254,6 @@ photodiode_flash = true;
 flash_rect_size = [90 90];
 
 bonus_reward_min_wait = 1; % give bonus rewards at most every 1s 
-
-% if isfield(s, 'apply_gaze_center_adj')
-%     gaze_center_adj_y = s.gaze_center_adj_y;
-%     gaze_center_adj_x = s.gaze_center_adj_x;
-%     apply_gaze_center_adj = s.apply_gaze_center_adj;
-% else
-%     % offset in y
-%     gaze_center_adj_y = 116;
-%     gaze_center_adj_x = 0;
-%     apply_gaze_center_adj = true;
-% end
-% gaze_center_adj_y = 210;
 
 if isfield(s, 'wake_up_trials')
     wake_up_trials = s.wake_up_trials;
@@ -540,7 +536,7 @@ screen_hz = Screen('NominalFrameRate', screenid_stim);
 ifi=Screen('GetFlipInterval', win);
 halfifi = 0.5*ifi;
 
-if rsvp_mode
+if fix_exp_mode
     inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi);
 end
 
@@ -560,10 +556,10 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
     imgs_texture_ctrl = cell(1,length(imgs)); 
     for i = 1:length(imgs)
         imgs_texture{i} = Screen('MakeTexture', win,imgs{i});
-        %Screen('PreloadTextures', win,imgs_texture{i});
+        Screen('PreloadTextures', win,imgs_texture{i});
         if ctrl_screen
             imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,imgs{i});
-            %Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i}); 
+            Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i}); 
         end
     end
 end
@@ -821,7 +817,7 @@ else
 end
 
 
-if rsvp_mode
+if fix_exp_mode
     for i = 1:n_rsvp
         if i == n_rsvp
             clip_sequence_t = [clip_sequence_t,clip_sequence_t(2) + rsvp_iti_t*(i-1) + presentation_time*i];
@@ -1222,7 +1218,7 @@ for i = 1:n_trs_tot
     % ENTER STIMULUS
     while ~end_stim && ~exit_flag % loops for every frame
         t1_frame = GetSecs(); 
-        if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames && seqidx ~= 0
+        if fix_exp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames && seqidx ~= 0
             % go into a break
             inter_rsvp = true;
             interrsvpfridx = interrsvpfridx + 1; 
@@ -1444,7 +1440,7 @@ for i = 1:n_trs_tot
                     qual_check = true;
                 end
                 
-                if rsvp_mode
+                if fix_exp_mode
                     if curr_in_bb && qual_check
                         rsvp_break_ctr = 0;
                         % sample command trigger starts
@@ -1542,7 +1538,7 @@ for i = 1:n_trs_tot
 %             end
         end
         
-        if rsvp_mode && rsvpfridx >= stim_frames
+        if fix_exp_mode && rsvpfridx >= stim_frames
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
             rsvpfridx_old = rsvpfridx;
@@ -1553,15 +1549,15 @@ for i = 1:n_trs_tot
         if trial_init_timed_out(i)
             end_stim = 1;
         elseif strcmp(trial_mode, 'trial') || seqidx == 0
-            if ~rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames % finished successfully
+            if ~fix_exp_mode && seqidx ~= 0 && stfridx >= stim_frames % finished successfully
                 end_stim = 1;
-            elseif rsvp_mode && seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
+            elseif fix_exp_mode && seqidx ~= 0 && stfridx >= stim_frames && rsvp_ctr > n_rsvp % finished successfully
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
                 end_stim = 1;
             end
         elseif strcmp(trial_mode, 'foraging')
-            if rsvp_mode
+            if fix_exp_mode
                 if rsvp_ctr > n_rsvp
                     end_stim = 1;
                     calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; % inter_rsvp
@@ -1648,7 +1644,7 @@ for i = 1:n_trs_tot
                     end
                     
                 elseif strcmp(trial_mode, 'foraging')
-                    if rsvp_mode
+                    if fix_exp_mode
                         if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                             reward_this_trial = false;
                         else
@@ -1708,7 +1704,8 @@ for i = 1:n_trs_tot
                             reward_time(i) = GetSecs()-t_start_sec;
                             reward_trial(i) = true;
                             if reward_serial
-                                writeline(reward_pumphand, 'RUN');
+                                pumpReward_updateGUI(); 
+                                %writeline(reward_pumphand, 'RUN');
                                 
                                 %WaitSecs(reward_on_dur);
                             else
@@ -2256,8 +2253,8 @@ save_full = fullfile(save_data_dir, savefname);
     function pumpReward_updateGUI()
         %%%% UNCOMMENT 
         writeline(reward_pumphand, 'RUN');
-        %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
-        %drawnow;
+        set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
+        drawnow;
     end
 
 end
