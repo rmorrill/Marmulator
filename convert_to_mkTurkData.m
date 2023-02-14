@@ -71,7 +71,7 @@ jsonfile.TASK.FixationDuration = calib_settings.fixation_to_init;
 %"ChoiceOutsideGracePeriod": "",
 %"NStimuliPerBagBlock": "",
 jsonfile.TASK.BlinkGracePeriod = calib_settings.rsvp_break_after_t; 
-%"NRSVPMax": 0,
+jsonfile.TASK.NRSVPMax = calib_settings.n_rsvp;
 %"Automator": 0,
 %"AutomatorFilePath": "",
 %"CurrentAutomatorStage": 0,
@@ -118,8 +118,13 @@ jsonfile.ENV.FixationDotRadius = calib_settings.stim_pre_dot_sz;
 %"FixationDotColor": "white",
 %"ChoiceRadius": "",
 %"ChoiceColor": "",
-jsonfile.ENV.XGridCenter = calib.pts(:,1);
-jsonfile.ENV.YGridCenter = calib.pts(:,2); 
+if numel(calib.pts) == 2
+    jsonfile.ENV.XGridCenter = [calib.pts(:,1)];
+    jsonfile.ENV.YGridCenter = [calib.pts(:,2)];
+else
+    jsonfile.ENV.XGridCenter = calib.pts(:,1);
+    jsonfile.ENV.YGridCenter = calib.pts(:,2);
+end
 jsonfile.ENV.RewardDuration = reward.pulse_on_dur *1000;
 jsonfile.ENV.ParamFileName = calib_settings.expt_params; 
 %"ParamFileRev": "",
@@ -131,8 +136,9 @@ jsonfile.ENV.DataFileName =  settings.data_file_name;
 %"MinTrialsCriterion": -1,
 %"StagePctCorrect": -1,
 %"StageNTrials": -1,
-%"NRSVPMin": "",
-%"NRSVPMax": "",
+
+jsonfile.ENV.NRSVPMin = calib_settings.n_rsvp;
+jsonfile.ENV.NRSVPMax = calib_settings.n_rsvp;
 %"WebBluetoothAvailable": "",
 %"WebUSBAvailable": "",
 %"BatteryAPIAvailable": "",
@@ -158,7 +164,7 @@ jsonfile.ENV.ViewportPixels = calib_settings.disp_rect(3:4);
 jsonfile.ENV.ViewportPPI = settings.viewportPPI; 
 jsonfile.ENV.PhysicalPPI = jsonfile.ENV.ScreenPhysicalPixels(1) / settings.screenInches(1); 
 jsonfile.ENV.FrameRateDisplay = 1/settings.ifi_monitor; 
-%"FrameRateMovie": "",
+jsonfile.ENV.FrameRateMovie = 1/settings.ifi_monitor; 
 %"PrimeScenes": "",
 %"NumPrebufferTrials": "",
 %"MaxTrialsPerFile": "",
@@ -226,7 +232,7 @@ jsonfile.CANVAS.workspace = [0, 0,calib_settings.disp_rect(3),calib_settings.dis
 %     "SampleNouns": [],
 %     "SampleObjects": [],
 %     "SampleBagNames": [],
-jsonfile.SCENEMETA.SampleBagIdx = calib_settings.img_folder_idx; 
+jsonfile.SCENEMETA.SampleBagIdx = calib_settings.img_folder_idx-1; %0-index
 %     "SampleImageIdx": [],
 jsonfile.SCENEMETA.SampleImagePathList = calib_settings.img_list;  
 %     "TestImageSetDir": "",
@@ -269,12 +275,12 @@ end
 
 %% "TRIALEVENTS": {
 for i = 1:size(calib_settings.img_seq,1)
-    jsonfile.TRIALEVENTS.Sample.(strcat('x',num2str(i-1))) = calib_settings.img_seq(i,1:calib.n_completed); 
+    jsonfile.TRIALEVENTS.Sample.(strcat('x',num2str(i-1))) = calib_settings.img_seq(i,1:calib.n_completed)-1; 
 end
 
 %"Test": {},
-jsonfile.TRIALEVENTS.CorrectItem = calib.sequence(1:calib.n_completed); 
-jsonfile.TRIALEVENTS.FixationGridIndex = calib.sequence(1:calib.n_completed);
+jsonfile.TRIALEVENTS.CorrectItem = calib.sequence(1:calib.n_completed)-1; 
+jsonfile.TRIALEVENTS.FixationGridIndex = calib.sequence(1:calib.n_completed)-1;
 jsonfile.TRIALEVENTS.StartTime =  calib.stim_pre_start(1:calib.n_completed) *1000; % convert to ms  
 jsonfile.TRIALEVENTS.ReinforcementTime = reward.reward_time(1:calib.n_completed) *1000; % convert to ms 
 jsonfile.TRIALEVENTS.EndTime = calib.end_t(1:calib.n_completed)*1000; % convert to ms after reward or punishment is delivered 
@@ -306,8 +312,8 @@ end
 %"Response": [],
 
 for i = 1:size(calib_settings.clip_sequence,2)
-    jsonfile.TRIALEVENTS.TSequenceDesiredClip.(strcat('x',num2str(i))) = []; 
-    jsonfile.TRIALEVENTS.TSequenceActualClip.(strcat('x',num2str(i))) = (calib.clip_sequence_start_t(1:calib.n_completed,1) *1000)'; % convert to ms '; 
+    jsonfile.TRIALEVENTS.TSequenceDesiredClip.(strcat('x',num2str(i-1))) = []; 
+    jsonfile.TRIALEVENTS.TSequenceActualClip.(strcat('x',num2str(i-1))) = (calib.clip_sequence_start_t(1:calib.n_completed,i) *1000)'; % convert to ms '; 
 end
 
 jsonfile.TRIALEVENTS.SampleGridIndex = ones(1,calib.n_completed);

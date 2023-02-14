@@ -78,7 +78,7 @@ if ~isempty(lick_arduino)
     lick_flag = true;
     %lick_rect = [1490, 890, 1530, 930];
     rew_trs_since_lick = NaN;
-    stop_rewards_n_nolicks = 4;
+    stop_rewards_n_nolicks = 20;
     lick_times_all = nan(1,1e5);
     lick_idx = 0;
     Alphabet = 'abcdefghijklmnopqrstuvwxyz';
@@ -97,14 +97,16 @@ PsychJavaSwingCleanup;
 
 %% SETTINGS:
 s = load(expt_params);
-%ctrl_screen = false;
 ctrl_screen = true;
+if setup_config.screenid_stim == setup_config.screenid_ctrl
+    ctrl_screen = false;
+end
 multiflip = 0; 
 multiflip2 = 0; 
 dontclear = 0;
 dontclear2 = 0; 
 dontsync = 0; 
-dontsync2 = 1; 
+dontsync2 = 0; 
 
 % unpack everything
 save_params_name = s.save_params_name;
@@ -464,7 +466,7 @@ whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
 whitecol_interrsvp = whitecol *0.8; 
 blackcol_interrsvp = whitecol * 0.2; 
-graycol = (whitecol + blackcol)/2;
+graycol = floor((whitecol + blackcol)/2);
 
 rect_col = [255 0 0]; 
 rect_col = graycol; 
@@ -481,8 +483,6 @@ end
 
 % OPEN WINDOWS
 %fprintf('GUI MODE\n\n')
-%window_rect = [ 0   0 2000 864]; 
-%screenid_stim = 1; 
 [win, win_rect] = Screen('OpenWindow', screenid_stim, bg_col_val, window_rect);
 %ctrl_rect_debug = [0 0 1650 1200];
 shrink_factor = 0.5;
@@ -524,7 +524,7 @@ if trig_flag
         time_str = replace(session_time(12:end),'-',''); 
         for i = 1:length(time_str)
             IOPort('Write',trig_hand,sampleCommand_trig_cmd.on,1);
-            WaitSecs(0.01 * str2double(time_str(i)));
+            WaitSecs(0.01 * str2double(time_str(i)+1));
             IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
             WaitSecs(0.025); 
         end
@@ -560,10 +560,10 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
     imgs_texture_ctrl = cell(1,length(imgs)); 
     for i = 1:length(imgs)
         imgs_texture{i} = Screen('MakeTexture', win,imgs{i});
-        %Screen('PreloadTextures', win,imgs_texture{i});
+        Screen('PreloadTextures', win,imgs_texture{i});
         if ctrl_screen
             imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,imgs{i});
-            %Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i}); 
+            Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i}); 
         end
     end
 end
@@ -574,8 +574,10 @@ if wake_up_trials
     wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
     for i = 1:length(wake_up_imgs)
         wu_imgs_texture{i} = Screen('MakeTexture',win,wake_up_imgs{i});
+        Screen('PreloadTextures', win,wu_imgs_texture{i});
         if ctrl_screen
             wu_imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,wake_up_imgs{i});
+            Screen('PreloadTextures',win_ctrl,wu_imgs_texture_ctrl{i}); 
         end
     end
 end
@@ -807,28 +809,17 @@ else
 end
 
 % desired trial clip sequence
-if stimulus_pre_dot 
-    clip_sequence = {'fixation pt','stimulus'}; 
-    if require_fix_tr_init == 1
-        clip_sequence_t = [0,fixation_to_init];
-    else
-       clip_sequence_t = [0, stimulus_pre_time];
-    end
-
-else
-    clip_sequence = {'stimulus'}; 
-    clip_sequence_t = [0]; 
-end
-
+clip_sequence = {'stimulus'}; 
+clip_sequence_t = [0]; 
 
 if rsvp_mode
     for i = 1:n_rsvp
         if i == n_rsvp
-            clip_sequence_t = [clip_sequence_t,clip_sequence_t(2) + rsvp_iti_t*(i-1) + presentation_time*i];
+            clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i];
             clip_sequence = [clip_sequence,'trial_end']; 
         else
-              clip_sequence_t = [clip_sequence_t,clip_sequence_t(2) + rsvp_iti_t*(i-1) + presentation_time*i,...
-            clip_sequence_t(2) + rsvp_iti_t*i + presentation_time*i];
+              clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i,...
+            clip_sequence_t(1) + rsvp_iti_t*i + presentation_time*i];
             clip_sequence = [clip_sequence,'blank','stimulus']; 
         end
     end
@@ -894,14 +885,15 @@ audio_handle = [];
 [samplecount,ninchannels] = size(aud_y); 
 aud_y = repmat(aud_y',2/ninchannels,1); 
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
-audio_handle(1) = PsychPortAudio('Open', 1, [], 1, aud_fs,2, [],suggestedLat);
+n_dev = 4; 
+audio_handle(1) = PsychPortAudio('Open', n_dev, [], 1, aud_fs,2, [],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(1), aud_y);
 
 % punish
 [aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file); 
 [samplecount,ninchannels] = size(aud_pun_y); 
 aud_pun_y = repmat(aud_pun_y',2/ninchannels,1); 
-audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
+audio_handle(2) = PsychPortAudio('Open', n_dev, [], 1, aud_pun_fs,2,[],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(2), aud_pun_y);
 %%
 %iti_frames = round(inter_stim_interval(1)/1e3/ifi);
@@ -1167,10 +1159,6 @@ for i = 1:n_trs_tot
                     fix_pre_fr_ctr = fix_pre_fr_ctr + 1;
                     blink_ctr = 0;
                    
-                    if fix_pre_fr_ctr == 3
-                        calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; 
-                        clip_ctr = clip_ctr + 1;             
-                    end
                 elseif (~curr_in_bb || ~qual_check) && fix_pre_fr_ctr>3 && blink_ctr<n_frames_blink
                     blink_ctr = blink_ctr + 1;
                 else
@@ -1221,7 +1209,6 @@ for i = 1:n_trs_tot
     
     % ENTER STIMULUS
     while ~end_stim && ~exit_flag % loops for every frame
-        t1_frame = GetSecs(); 
         if rsvp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames && seqidx ~= 0
             % go into a break
             inter_rsvp = true;
@@ -1501,37 +1488,36 @@ for i = 1:n_trs_tot
             
             %t2_frame = GetSecs(); 
             %%%%% STIMULUS FRAME FLIP
+            if stfridx == 1
+                calib_st_t(i) = GetSecs()-t_start_sec;
+            end
             vbl = Screen('Flip', win, vbl + halfifi,dontclear, dontsync, multiflip);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             %t_dur(stfridx) = t1_frame - t2_frame;
             
-            if trig_flag && ~stim_trig_hi && ~inter_rsvp
+            if trig_flag && ~stim_trig_hi && ~inter_rsvp && seqidx ~=0
                 %disp('stim trig on');
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
                 stim_trig_hi = 1;
-            elseif trig_flag && stim_trig_hi && inter_rsvp
+            elseif trig_flag && stim_trig_hi && inter_rsvp && seqidx ~=0
                 %  disp('stim trig off');
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
                 stim_trig_hi = 0;
             end
             
              % sample command trigger starts
-            if trig_flag && ~isempty(sampleCommand_trig_cmd) && ~sampleCommand_trig_hi && stfridx == 1
+            if trig_flag && ~isempty(sampleCommand_trig_cmd) && ~sampleCommand_trig_hi && stfridx == 1 && seqidx ~=0
                 IOPort('Write', trig_hand, sampleCommand_trig_cmd.on, 1);
                 sampleCommand_trig_hi = 1;
             end
-            
-            if stfridx == 1
-                calib_st_t(i) = GetSecs()-t_start_sec;
-            end
-            
+           
             %clip time
             frame_t = vbl-t_start_sec;
-            frame_st_t = [frame_st_t,frame_t]; 
+            frame_st_t = [frame_st_t,(frame_t-calib_st_t(i))*1000]; % msec 
             frame_clip_num = [frame_clip_num,rsvp_ctr]; 
             
-            if rsvpfridx == 1 || interrsvpfridx == 1
-                calib_t_clip(i,clip_ctr) = frame_t;
+            if rsvpfridx == 1 || interrsvpfridx == 1 && ~isnan(clip_ctr) && seqidx ~=0
+                calib_t_clip(i,clip_ctr) = frame_t - calib_st_t(i);
                 clip_ctr = clip_ctr+1;
             end
 %             if ~isempty(tex1)    %tex1
@@ -1564,21 +1550,24 @@ for i = 1:n_trs_tot
             if rsvp_mode
                 if rsvp_ctr > n_rsvp
                     end_stim = 1;
-                    calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; % inter_rsvp
+                    calib_t_clip(i,clip_ctr) = GetSecs() -calib_st_t(i) - t_start_sec; % inter_rsvp
                 elseif rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                     end_stim = 1;
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                    clip_ctr = nan; 
                 end
             else
                 if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
                     end_stim = 1;
-                    calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; 
+                    calib_t_clip(i,clip_ctr) = GetSecs() - calib_st_t(i) -t_start_sec; 
                 elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && ~entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                    clip_ctr = nan; 
                 elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
+                    clip_ctr = nan; 
                 end
             end
         end
@@ -1698,17 +1687,12 @@ for i = 1:n_trs_tot
                         %PsychPortAudio('Stop', audio_handle(1));
                     end
                     
-                    if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
-                       IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
-                       sampleCommand_trig_hi = 0;
-                    end
-                    
                     if ~isempty(reward_pumphand)
                         if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
                             reward_time(i) = GetSecs()-t_start_sec;
                             reward_trial(i) = true;
                             if reward_serial
-                                writeline(reward_pumphand, 'RUN');
+                                %writeline(reward_pumphand, 'RUN');
                                 
                                 %WaitSecs(reward_on_dur);
                             else
@@ -1721,7 +1705,7 @@ for i = 1:n_trs_tot
                             %drawnow;                                
                             t2_rew = GetSecs(); 
                             %sca; keyboard 
-                            %pumpReward_updateGUI(); 
+                            pumpReward_updateGUI(); 
                         elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
                             fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick); 
                         end
@@ -1742,6 +1726,11 @@ for i = 1:n_trs_tot
                         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
                     end
                     %WaitSecs(wait_after_reward);
+                    
+                    if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
+                       IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
+                       sampleCommand_trig_hi = 0;
+                    end
                     
                 else
                     fprintf('no reward: trial %d\n', i);
@@ -1800,8 +1789,10 @@ for i = 1:n_trs_tot
         avail_phys_mem(i) = m.SystemMemory.Available;
     end
     
-    calib_frame_st_t{i} = frame_st_t;
-    calib_frame_clip_num{i} = frame_clip_num; 
+    if seqidx ~= 0
+        calib_frame_st_t{i} = frame_st_t;
+        calib_frame_clip_num{i} = frame_clip_num; 
+    end
 end
 
 Screen('FillRect', win, bg_col_val);
@@ -2256,7 +2247,7 @@ save_full = fullfile(save_data_dir, savefname);
     function pumpReward_updateGUI()
         %%%% UNCOMMENT 
         writeline(reward_pumphand, 'RUN');
-        %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
+        set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
         %drawnow;
     end
 
