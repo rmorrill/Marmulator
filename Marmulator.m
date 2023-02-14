@@ -357,6 +357,7 @@ end
 guidata(hObject, handles);
 
 
+n_pts_tot = calib.n_pts_x * calib.n_pts_y; 
 if calib.n_completed > 3
     try
         if contains(handles.params.save_params_name,'center_point')
@@ -366,12 +367,12 @@ if calib.n_completed > 3
             else
                 fprintf('Will not run center point estimation\nTo run manually use get_mean_x_y_pts.m\n');
             end
-        else
+        elseif n_pts_tot > 1
             questans = questdlg('Would you like to run multi-point calibration?', 'Run calibration', 'Yes', 'No', 'Yes');
             if strcmp(questans, 'Yes')
                 eyetracker_calibration_fcn(save_full)
             else
-                fprintf('Will not run center point estimation\nTo run manually use get_mean_x_y_pts.m\n');
+                fprintf('Will not run multi-point calibration\nTo run manually use eyetracker_calibration_fcn.m\n');
             end
         end
     catch me
@@ -496,8 +497,8 @@ else
     set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
     set(handles.hold_time_edit, 'String', sprintf('%d', handles.hold_time));
     set(handles.response_time_edit, 'String', sprintf('%d', handles.response_time));
-    if isfield(handles.params, 'n_rsvp') && handles.params.n_rsvp > 1
-        handles.trial_mode = 'rsvp';
+    if (isfield(handles.params, 'n_rsvp') && handles.params.n_rsvp > 1) || (isfield(handles.params, 'fixation_exp_mode') && handles.params.fixation_exp_mode)
+        handles.trial_mode = 'fix_exp_mode';
     else
         handles.trial_mode = handles.params.trial_mode;
     end
@@ -532,7 +533,7 @@ else
         set(handles.response_time_edit, 'Enable', 'off');
         set(handles.n_rsvp_edit, 'Enable', 'off'); 
         set(handles.break_after_edit, 'Enable', 'off'); 
-    elseif strcmp(handles.trial_mode, 'rsvp')
+    elseif strcmp(handles.trial_mode, 'fix_exp_mode')
         set(handles.trial_time_edit,'Enable', 'on');
         set(handles.hold_time_edit, 'Enable', 'off');
         set(handles.response_time_edit, 'Enable', 'off');
