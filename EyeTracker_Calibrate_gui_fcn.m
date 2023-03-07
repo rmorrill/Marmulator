@@ -10,11 +10,10 @@ profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
 
-%fix_exp_mode = true; % fixation experiment mode 
-
 newPriority = 1; 
 oldPriority = Priority(newPriority); 
 fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
+PsychJavaSwingCleanup;
 
 % mkTurk_data_save_flag
 mkTurk_data_save = 0; 
@@ -94,10 +93,12 @@ else
     fprintf('WARNING: NO LICKOMETER ARDUINO HANDLE PROVIDED!\nLicks will not be recorded\n');  
 end
 
+%% photodiode flash
+photodiode_flash = true;
+flash_rect_size = [90 90];
 
-PsychJavaSwingCleanup;
 
-%% SETTINGS:
+%% SETUP: load settings
 s = load(expt_params);
 %ctrl_screen = false;
 ctrl_screen = true;
@@ -120,8 +121,6 @@ calibration_win_len = s.calibration_win_len;
 calibration_win_ht = s.calibration_win_ht;
 n_pts_x = s.n_pts_x;
 n_pts_y = s.n_pts_y;
-%trs_per_location = s.trs_per_location;
-%presentation_time = s.presentation_time;
 inter_stim_interval = s.inter_stim_interval;
 iti_random = s.iti_random;
 position_order = s.order;
@@ -156,10 +155,7 @@ else
 end
 trial_mode = s.trial_mode;
 reward_on = s.reward_on;
-%time_to_reward = s.time_to_reward;
-%time_out_after = s.time_out_after;
 location_require_quality = s.location_require_quality;
-%location_require_quality = false; % RJM
 stim_mode = s.stim_mode;
 img_folder = s.img_folder;
 pulse_size = s.pulse_size;
@@ -181,7 +177,6 @@ rew_col_end = s.rew_col_end;
 play_reward_sound = s.play_reward_sound;
 reward_sound_file = s.reward_sound_file;
 give_punishments = s.give_punishments;
-%punish_length_ms = s.punish_length_ms;
 play_punish_sound = s.play_punish_sound;
 punish_sound_file = s.punish_sound_file;
 if eye_method_mouse
@@ -194,7 +189,6 @@ n_frames_blink = s.n_frames_blink;
 give_rewards = s.give_rewards;
 reward_thresh = s.reward_thresh;
 reward_on_dur = s.reward_on_dur;
-%reward_vol = s.reward_vol;
 wait_after_reward = s.wait_after_reward;
 
 if isfield(s, 'stimulus_pre_dot')
@@ -213,7 +207,6 @@ if isfield(s,'stimulus_pre_dot_disappear')
 else
     stimulus_pre_dot_disappear = 0;
 end
-
 
 %% fixation mode/rsvp setup
 % fix mode will use presentation time for each stimulus duration
@@ -249,38 +242,12 @@ else
     punish_length_ms_draw = NaN;
 end
 
-
-%image_order = 'random';
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1);
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2);
 apply_gaze_center_adj = true;
 
-%% photodiode flash
-photodiode_flash = true;
-flash_rect_size = [90 90];
 
 bonus_reward_min_wait = 1; % give bonus rewards at most every 1s 
-
-if isfield(s, 'wake_up_trials')
-    wake_up_trials = s.wake_up_trials;
-    wake_up_every = s.wake_up_every;
-    wake_up_tr_dur = s.wake_up_tr_dur;
-    wake_up_img_fold = s.wake_up_img_fold;
-    wake_up_stim_size_x = s.wake_up_stim_size_x;
-    wake_up_stim_size_y = s.wake_up_stim_size_y;
-    if isfield(s,'wake_up_reward')
-        wake_up_reward = s.wake_up_reward;
-    else
-        wake_up_reward = 1;
-    end
-else
-    wake_up_trials = false;
-    wake_up_every = [];
-    wake_up_tr_dur = [];
-    wake_up_img_fold = '';
-    wake_up_stim_size_x = [];
-    wake_up_stim_size_y = [];
-end
 
 start_rew_vol_str = get(reward_today_hand, 'String');
 start_reward_vol = str2double(char(regexp(start_rew_vol_str, '\d*\.\d*', 'match')));
@@ -302,27 +269,21 @@ if ~isempty(save_base_remote)
     end
 end
 
-%eye_method = 'mouse';
-%%
-eye_rect = [0 0 1 1] ;
-eye = 0; % eye A
+%% SETUP: keystroke shortcuts
 
-
-good_pts = [];
-good_pts_cols = [];
-
-%session_time = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
-%%
-PsychJavaSwingCleanup;
-%InitializeMatlabOpenGL;
-AssertOpenGL;
-InitializePsychSound(1);
 esc_key = KbName('ESC');
 rew_end_key = KbName('r');
 bonus_rew_key = KbName('b'); 
 wake_up_movie_key = KbName('v'); 
 wake_up_movie_terminate_key = KbName('t'); 
-% setup eyetracker-related
+
+%% SETUP: eyetracker-related
+eye_rect = [0 0 1 1] ;
+eye = 0; % eye A
+
+good_pts = [];
+good_pts_cols = [];
+
 if strcmp(eye_method, 'rand') | strcmp(eye_method, 'mouse')
     use_vpx = false;
 else
@@ -371,7 +332,7 @@ alphas = linspace(0, 255, n_gaze_pts_draw);
 rgba_cols = [gaze_pt_dot_cols; alphas];
 dotsz = gaze_pt_sz;
 
-% setup for images
+%% SETUP: image presentation mode
 EXT = {'.tiff','.png','.jpg','.jpeg'};
 img_folder_idx = [];
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
@@ -428,6 +389,7 @@ end
 [unique_img_folder,~,ic] = unique(img_folder_idx);
 n_imgs_per_folder = accumarray(ic,1);
 
+%% SETUP: constant background mode (new 2/2023)
 if constant_bg_mode % read the backgrounds separately 
     % go through folders and search for a 'background_*.*' images in each    if iscell(img_folder)
     if iscell(img_folder)
@@ -464,7 +426,29 @@ if constant_bg_mode % read the backgrounds separately
     n_bg_imgs = numel(bg_imgs);
 end
 
-% read wake up images
+%% SETUP: wake up images
+
+if isfield(s, 'wake_up_trials')
+    wake_up_trials = s.wake_up_trials;
+    wake_up_every = s.wake_up_every;
+    wake_up_tr_dur = s.wake_up_tr_dur;
+    wake_up_img_fold = s.wake_up_img_fold;
+    wake_up_stim_size_x = s.wake_up_stim_size_x;
+    wake_up_stim_size_y = s.wake_up_stim_size_y;
+    if isfield(s,'wake_up_reward')
+        wake_up_reward = s.wake_up_reward;
+    else
+        wake_up_reward = 1;
+    end
+else
+    wake_up_trials = false;
+    wake_up_every = [];
+    wake_up_tr_dur = [];
+    wake_up_img_fold = '';
+    wake_up_stim_size_x = [];
+    wake_up_stim_size_y = [];
+end
+
 if wake_up_trials
     wu_image_fname_list = {}; 
     if iscell(wake_up_img_fold)
@@ -502,16 +486,18 @@ if wake_up_trials
     end
 end
 
-%%
+%% PTB open windows
+PsychJavaSwingCleanup;
+%InitializeMatlabOpenGL;
+AssertOpenGL;
+InitializePsychSound(1);
+
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
 Screen('Preference', 'SkipSyncTests', 0);
 Screen('Preference', 'VisualDebugLevel', 0);
 Screen('Preference', 'TextRenderer', 0);
-
-%screenid_stim = max(Screen('Screens'));
-%screenid_ctrl = max(Screen('Screens'))-1;
 
 % get colors
 whitecol = WhiteIndex(screenid_stim);
@@ -520,7 +506,7 @@ whitecol_interrsvp = whitecol *0.8;
 blackcol_interrsvp = whitecol * 0.2; 
 graycol = (whitecol + blackcol)/2;
 
-rect_col = [255 0 0]; 
+%rect_col = [255 0 0]; 
 rect_col = graycol; 
 
 switch bg_col
@@ -532,8 +518,6 @@ switch bg_col
         bg_col_val = blackcol;
 end
 
-
-% OPEN WINDOWS
 %fprintf('GUI MODE\n\n')
 %window_rect = [ 0   0 2000 864]; 
 %screenid_stim = 1; 
@@ -541,6 +525,14 @@ end
 %ctrl_rect_debug = [0 0 1650 1200];
 shrink_factor = 0.5;
 ctrl_rect_debug = shrink_factor * win_rect; 
+
+screen_hz = Screen('NominalFrameRate', screenid_stim);
+ifi=Screen('GetFlipInterval', win);
+halfifi = 0.5*ifi;
+
+if fix_exp_mode
+    inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi);
+end
 
 if ~isempty(lick_arduino)
     lick_rect = [ctrl_rect_debug(3)-90*shrink_factor, ctrl_rect_debug(4)-200, ctrl_rect_debug(3), ctrl_rect_debug(4)-200+90*shrink_factor];
@@ -550,10 +542,8 @@ if ctrl_screen; [win_ctrl, win_rect_ctrl] = Screen('OpenWindow', screenid_ctrl, 
 %[win0, winRect0] = Screen('OpenWindow', screenId, bgcolor * 255, [0 0 300 300], [], [], [], [], [], kPsychGUIWindow);
 Screen('BlendFunction', win, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 
-
 HideCursor(screenid_stim); 
 HideCursor(screenid_ctrl); 
-
 
 if ctrl_screen
     Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
@@ -567,7 +557,12 @@ if photodiode_flash
         win_rect(3), win_rect(4)];
 end
 
-% turn on session trigger
+if apply_gaze_center_adj
+    y_cent = y_cent + gaze_center_adj_y;
+    x_cent = x_cent + gaze_center_adj_x;
+end
+
+%% TRIGGER: turn on session trigger
 if trig_flag
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
     WaitSecs(0.05);
@@ -585,19 +580,7 @@ if trig_flag
     end
 end
 
-if apply_gaze_center_adj
-    y_cent = y_cent + gaze_center_adj_y;
-    x_cent = x_cent + gaze_center_adj_x;
-end
-
-screen_hz = Screen('NominalFrameRate', screenid_stim);
-ifi=Screen('GetFlipInterval', win);
-halfifi = 0.5*ifi;
-
-if fix_exp_mode
-    inter_rsvp_frames = round(rsvp_iti_t/1e3/ifi);
-end
-
+%% COLOR SHIFT FEEDBACK: DEPRECATED???
 if color_shift_feedback
     n_frames_til_rew = round(time_to_reward/1e3/ifi);
     col_shift_change = nan(3,n_frames_til_rew);
@@ -607,7 +590,7 @@ if color_shift_feedback
     col_shift_change(4,:) = ones(1,n_frames_til_rew)*0.5;
 end
 
-%% preload all textures
+%% LOAD: preload all textures
  % load all image textures 
  if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
      %imgs_texture = cell(1,length(imgs));
@@ -642,7 +625,7 @@ end
      end
  end
 
-% load all wake up images
+%% LOAD: load all wake up images
 if wake_up_trials
     %wu_imgs_texture = cell(1,length(wake_up_imgs));
     %wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
@@ -675,12 +658,13 @@ if strcmp(stim_mode, 'movie')
     Screen('PlayMovie', moviePtr, movie_rate, 1);
     WaitSecs(1); 
 end
-%% set up stimulus locations on screen
+
+%% SETUP: set up stimulus locations on screen
+
 calib_rect = [0 0 calibration_win_len, calibration_win_ht];
 calib_rect_cent = CenterRectOnPoint(calib_rect, x_cent, y_cent);
 
 % calculate x locs, y locs for stim
-
 if n_pts_x == 1
     x_pts = round(mean([calib_rect_cent(1), calib_rect_cent(3)]));
 else
@@ -715,6 +699,7 @@ if isfield(s,'add_center')
     end
 end
 
+%% SETUP: spinning: DEPRECATED???
 if strcmp(stim_mode,'spinning')
     center_coord = [win_rect(3)/2, win_rect(4)/2];
     
@@ -779,8 +764,7 @@ if strcmp(stim_mode,'smooth pursuit')
     
 end
 
-
-%% set up img sequence
+%% SETUP: img sequence
 n_trs_requested = n_calib_pts*trs_per_location;
 
 if strcmp(stim_mode, 'images')
@@ -853,16 +837,6 @@ if strcmp(stim_mode, 'images')
         img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
     end
     
-    %     if wake_up_trials % insert wake up trials as n_rsvp x 1 zeros matrices in appropriate position
-    %         wu_tr_idx = find(tr_seq == 0);
-    %         for i = 1:numel(wu_tr_idx)
-    %             wu_tr_idx_curr = wu_tr_idx(i);
-    %             img_seq = [img_seq(:,1:wu_tr_idx_curr-1) zeros(n_rsvp, 1) img_seq(:,wu_tr_idx_curr:end)];
-    %         end
-    %     end
-    %     image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
-    
-    %n_trs_tot = size(img_seq, 2);
     n_trs_curr = size(img_seq, 2); 
 else
     img_seq = [];
@@ -870,11 +844,7 @@ else
     n_trs_curr = n_trs_requested; 
 end
 
-
-
-
-
-%% set up trial sequence
+%% SETUP: trial sequence
 if strcmp(image_order,'block')
     trs_per_location = trs_per_location * length(unique_img_folder); 
 end
@@ -930,102 +900,11 @@ else
     n_trs_tot = n_trs_requested;
 end
 
-
 image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
 
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
 end
-
-% % set up img sequence
-% if strcmp(stim_mode, 'images')
-%     if constant_bg_mode
-%         n_reps = ceil(n_trs_requested*n_rsvp/sum(n_imgs_per_folder));
-%         img_seq = [];
-%         bg_seq = [];
-%         for i = 1:length(unique_img_folder)
-%             stidx = sum(n_imgs_per_folder(1:i-1))+1; 
-%             img_seq_tmp = repmat(stidx:stidx+sum(n_imgs_per_folder(i))-1, [1, n_reps]);
-%             n_trs_per_folder(i) = floor(length(img_seq_tmp)/n_rsvp);
-%             n_stim_per_folder(i) = n_trs_per_folder(i) * n_rsvp;
-%             img_seq_tmp = img_seq_tmp(1:n_stim_per_folder(i));
-%             ridx_tmp = randperm(length(img_seq_tmp));
-%             img_seq_rnd = img_seq_tmp(ridx_tmp);
-%             img_seq = [img_seq; reshape(img_seq_rnd, [numel(img_seq_rnd)/n_rsvp, n_rsvp])]; 
-%             bg_seq = [bg_seq; ones(n_trs_per_folder(i), 1)*i];
-%             
-%         end
-%         
-%         % trial randomization
-%         tr_ridx = randperm(numel(bg_seq));
-%         bg_seq = bg_seq(tr_ridx, :);
-%         img_seq = img_seq(tr_ridx, :);
-%         img_seq = img_seq'; 
-%         
-%     elseif strcmp(image_order, 'random')
-%         n_rsvps = n_trs_requested*n_rsvp;
-%         x = floor(n_rsvps/n_imgs);
-%         if x>0
-%             img_seq = [];
-%             for q = 1:x
-%                 img_seq = [img_seq randperm(n_imgs)];
-%             end
-%             img_seq = [img_seq randperm(n_imgs, mod(n_rsvps, n_imgs))];
-%         else
-%             img_seq = randperm(n_imgs, n_rsvps);
-%         end
-%         
-%     elseif strcmp(image_order,'block')
-%         % randomly draw from each image folder, but present folders
-%         % sequentially as listed in the img_folder
-%         % number of trials specified in the Marmulator GUI will now apply
-%         % to each image folder
-%         img_seq = [];
-%         for i = 1:length(unique_img_folder)
-%             n_rsvps = n_trs_requested/length(unique_img_folder)*n_rsvp;
-%             x = floor(n_rsvps/n_imgs_per_folder(i)); 
-%             if i > 1
-%                 idx_start = n_imgs_per_folder(i-1);
-%             else
-%                 idx_start = 0;
-%             end
-%             if x>0
-%                 for q = 1:x
-%                     img_seq = [img_seq randperm(n_imgs_per_folder(i))+idx_start];
-%                 end
-%                 img_seq = [img_seq randperm(n_imgs_per_folder(i),mod(n_rsvps,n_imgs_per_folder(i)))+idx_start]; 
-%             else
-%                 img_seq = [img_seq randperm(n_imgs_per_folder(i), n_rsvps)+idx_start];
-%             end
-%         end
-%         
-%     else % sequential presentation 
-%         n_rsvps = n_trs_requested*n_rsvp;
-%         x = floor(n_rsvps/n_imgs);
-%         img_seq = [repmat(1:n_imgs, 1, x) 1:mod(n_rsvps, x*n_imgs)];
-%     end
-%     
-%     if ~constant_bg_mode
-%         img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
-%     end
-%     
-%     if wake_up_trials % insert wake up trials as n_rsvp x 1 zeros matrices in appropriate position
-%         wu_tr_idx = find(tr_seq == 0);
-%         for i = 1:numel(wu_tr_idx)
-%             wu_tr_idx_curr = wu_tr_idx(i);
-%             img_seq = [img_seq(:,1:wu_tr_idx_curr-1) zeros(n_rsvp, 1) img_seq(:,wu_tr_idx_curr:end)];
-%         end
-%     end
-%     image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
-% else
-%     img_seq = [];
-%     image_displayed = [];
-% end
-% 
-% n_trs_tot = size(img_seq, 2); 
-
-%sca
-%keyboard
 
 % desired trial clip sequence
 if stimulus_pre_dot 
@@ -1074,19 +953,9 @@ elseif strcmp(trial_mode, 'foraging')
     t_sin = 0:ifi:(time_out_after+time_to_reward/1e3);
 end
 
+%% SETUP: bounding boxes
 
-% set up audio feedback
-% if play_reward_sound
-%     [aud_y, aud_fs] = audioread(reward_sound_file);
-% end
-% 
-% if play_punish_sound
-%    [aud_pun_y, aud_pun_fs] = audioread(punish_sound_file);
-% end
-
-%%
 % set up bounding boxes for display on the control screen
-% first off, give them unique colors
 cols = round(distinguishable_colors(n_calib_pts+1)*255);
 bounding_rect_tmp = [0,0,bounding_rect_size_x, bounding_rect_size_y];
 if ~isempty(manual_bounding_boxes)
@@ -1108,7 +977,7 @@ else
     bounding_rects_stim_pre_dot = CenterRectOnPoint(bounding_rect_stim_pre_dot_tmp,all_pts(:,1),all_pts(:,2));
 end
 
-%% Reward and Punish sound handles using PsychPortAudio
+%% SETUP: Reward and Punish sound handles using PsychPortAudio
 audio_handle = [];
 % reward
 [aud_y, aud_fs] = psychwavread(reward_sound_file); 
@@ -1125,7 +994,6 @@ aud_pun_y = repmat(aud_pun_y',2/ninchannels,1);
 audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(2), aud_pun_y);
 %%
-%iti_frames = round(inter_stim_interval(1)/1e3/ifi);
 if iti_random
     iti_frames = round((rand(1,n_trs_tot)*diff(inter_stim_interval)+inter_stim_interval(1))/1e3/ifi);
 else
@@ -1135,29 +1003,6 @@ end
 stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi); % strimulus_pre_time in ms
 wait_after_rew_frames = round(wait_after_reward/ifi); % wait_after_reward in s
 
-Screen('FillRect', win, bg_col_val)
-%tex1 = Screen('MakeTexture', win, img);
-seqidx = 0;
-vbl = Screen('Flip', win);
-t_start_sec = GetSecs();
-
-reward_trial = false(1,n_trs_tot); % for recording whether reward was administered
-correct_trial = false(1,n_trs_tot); % for recording whether a trial was correct - not necesssarily same as reward_trial if using stop_rewards_n_nolicks
-punish_trial = false(1,n_trs_tot); % whether a trial was punished
-reward_time = nan(1,n_trs_tot); % for recording the time of a reward
-time_to_bb = nan(1,n_trs_tot);
-trial_aborted = false(1, n_trs_tot);
-manual_reward_t = nan(1,n_trs_tot);
-stim_pre_start = nan(1,n_trs_tot);
-stim_pre_end = nan(1,n_trs_tot);
-trial_init_timed_out = false(1,n_trs_tot);
-calib_st_t = nan(1,n_trs_tot);
-calib_end_t = nan(1,n_trs_tot);
-calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
-calib_frame_st_t = cell(1,n_trs_tot); 
-calib_frame_clip_num = cell(1,n_trs_tot); 
-wake_up_image_displayed = cell(1, n_trs_tot);
-    
 if strcmp(stim_mode,'spinning')
     tr_seq = nan(n_calib_pts,n_trs_tot);
     
@@ -1189,6 +1034,25 @@ if strcmp(stim_mode,'smooth_pursuit')
     tr_seq = randi(length(all_pts),[n_trs_tot,1]);
 end
 
+%% SETUP: initialize state vars and empty vectors for run
+
+reward_trial = false(1,n_trs_tot); % for recording whether reward was administered
+correct_trial = false(1,n_trs_tot); % for recording whether a trial was correct - not necesssarily same as reward_trial if using stop_rewards_n_nolicks
+punish_trial = false(1,n_trs_tot); % whether a trial was punished
+reward_time = nan(1,n_trs_tot); % for recording the time of a reward
+time_to_bb = nan(1,n_trs_tot);
+trial_aborted = false(1, n_trs_tot);
+manual_reward_t = nan(1,n_trs_tot);
+stim_pre_start = nan(1,n_trs_tot);
+stim_pre_end = nan(1,n_trs_tot);
+trial_init_timed_out = false(1,n_trs_tot);
+calib_st_t = nan(1,n_trs_tot);
+calib_end_t = nan(1,n_trs_tot);
+calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
+calib_frame_st_t = cell(1,n_trs_tot); 
+calib_frame_clip_num = cell(1,n_trs_tot); 
+wake_up_image_displayed = cell(1, n_trs_tot);
+
 reward_ct = 0;
 man_reward_ct = 0;
 bonus_reward_ct = 0; 
@@ -1205,9 +1069,16 @@ if profile_memory
     avail_phys_mem = nan(1,n_trs_tot);
 end
 
-% start the stimulus loop
+%% RUN: start the stimulus loop
+
+Screen('FillRect', win, bg_col_val)
+seqidx = 0;
+vbl = Screen('Flip', win);
+t_start_sec = GetSecs();
+
 for i = 1:n_trs_tot
     
+    % set variables for each trial
     curr_tr = i;
     seqidx = tr_seq(i);
     stfridx = 0;
@@ -1215,16 +1086,12 @@ for i = 1:n_trs_tot
     interrsvpfridx = 0; 
     loop_brk_ctr = 0;
     pre_stim_timer = 0;
-    manual_reward_flag = false;
+    manual_reward_flag = false; % has a manual reward been given on the trial yet? 
     entered_bb = false; % did eye go into bb?
     skip_reward = 0; 
     frame_st_t = [];
     frame_clip_num = []; 
     t_dur = []; 
-    
-%     if strcmp(stim_mode, 'images')
-%             img_idx = img_seq(rsvp_ctr, i);
-%     end
     
     if seqidx ~= 0
         xcurr = all_pts(seqidx,1);
@@ -1263,14 +1130,6 @@ for i = 1:n_trs_tot
         Screen('FillRect', win_ctrl, bg_col_val)
         vbl2 = Screen('Flip', win_ctrl);
     end
-    
-    %%%% gratuitous? - RJM
-%     drawInfoText();
-%     drawBoundingBoxes();
-%     if draw_retain_bb_pts
-%         drawGoodEyePts(0);
-%     end
-%     if lick_flag; lick = checkLick(); end
     
     for j = 1:iti_frames(i)
         idx_all = idx_all +1;
@@ -1318,7 +1177,6 @@ for i = 1:n_trs_tot
             end
 
             drawInfoText();
-            %drawBoundingBoxes(curr_bb_stim_pre_dot);
             checkLick(); 
             
             if seqidx ~= 0
@@ -1415,8 +1273,6 @@ for i = 1:n_trs_tot
                     fix_pre_fr_ctr = 0;
                 end
                 
-                %sca
-                %keyboard
                 if fix_pre_fr_ctr >= round(fixation_to_init/1e3/ifi)
                     end_stim_pre = 1;
                 elseif pre_stim_timer>time_out_trial_init_s
@@ -1481,10 +1337,6 @@ for i = 1:n_trs_tot
             Screen('FillRect', win, bg_col_val);
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
-            % draw informational text into control window:
-            %drawInfoText();
-            %drawBoundingBoxes();
-            
             if seqidx ~= 0 && strcmp(trial_mode, 'foraging') && color_shift_feedback && loop_brk_ctr>0
                 Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
                 if ctrl_screen; Screen('FillRect', win_ctrl, col_shift_change(:,loop_brk_ctr), curr_bb); end
@@ -1492,7 +1344,6 @@ for i = 1:n_trs_tot
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
-            
             
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
             eye_in_bb_curr(stfridx) = curr_in_bb;
@@ -1518,7 +1369,6 @@ for i = 1:n_trs_tot
                         ycurr = all_pts{seqidx}(stfridx,2);
                         stim_rect_curr = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
                         
-                        %Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
                         Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
                             Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
@@ -1534,15 +1384,12 @@ for i = 1:n_trs_tot
                         end
                         
                         if pulse_size
-                            %sca
-                            %keyboard
                             pulse_sin = (cos(2*pi*pulse_rate(i)*t_sin) +1)/2;
                             pulse_sin = (pulse_sin + 1)/2; % 50% modulation depth
                             pulse_t_idx = pulse_t_idx + 1;
                             if pulse_t_idx>length(t_sin)
                                 pulse_t_idx =1;
                             end
-                            %rsx_curr = stim_rect_size_x*pulse_sin(stfridx);
                             rsx_curr = stim_rect_size_x*pulse_sin(pulse_t_idx);
                             rsy_curr = round(rsx_curr/ar(img_idx));
                         else
@@ -1551,10 +1398,8 @@ for i = 1:n_trs_tot
                         end
                         
                         stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
-                        %Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
                         Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
-                            %Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
                             Screen('DrawTexture', win_ctrl, imgs_texture_ctrl(img_idx), [], stim_rect_curr*shrink_factor)
                             Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                                 dotsz, rgba_cols(:,end), [], 1);
@@ -1598,17 +1443,10 @@ for i = 1:n_trs_tot
                         
                         curr_x = mvdot_coords(1);
                         curr_y = mvdot_coords(2);
-                        %                         if stimulus_pre_dot && ~stimulus_pre_dot_disappear
-                        %                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                        %                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                        %                         end
-                        %mov_dur(end+1) = GetSecs()-t_mov_start;
                     case 'movie'
                         t_mov_start = GetSecs();
                         waitforimage = 0;
-                        %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
                         movtex_new = Screen('GetMovieImage', win, moviePtr, waitforimage);
-                        %Screen('PlayMovie', movie, rate, 1, 1.0);
                         if movtex_new>0
                             movtex = movtex_new;
                         end
@@ -1632,11 +1470,6 @@ for i = 1:n_trs_tot
                             Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                                 dotsz, rgba_cols(:,end), [], 1);
                         end
-                        %Screen('DrawDots', win_ctrl, all_pts(seqidx,:), 5, blackcol, [], 1)
-                        %                         if stimulus_pre_dot && ~stimulus_pre_dot_disappear
-                        %                             Screen('DrawDots', win_ctrl, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                        %                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
-                        %                         end   
                 end
                 
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
@@ -1650,13 +1483,10 @@ for i = 1:n_trs_tot
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
                 end
                 
-                % stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                 % randomly draw from a list of 
-                %Screen('DrawTexture', win, wu_imgs_texture{wu_img_idx}, [], stim_rect);
                 Screen('DrawTexture', win, wu_imgs_texture(wu_img_idx), [], stim_rect);
                 
                 if ctrl_screen 
-                    %Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl{wu_img_idx}, [], stim_rect*shrink_factor);
                     Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl(wu_img_idx), [], stim_rect*shrink_factor);
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                         dotsz, rgba_cols(:,end), [], 1);
@@ -1669,8 +1499,7 @@ for i = 1:n_trs_tot
                         Screen('DrawTexture', win_ctrl, bg_imgs_texture_ctrl(bgidx), [], bg_stim_rect_curr*shrink_factor)
                     end
                 end
-                %sca
-                %keyboard
+
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                     if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
                     Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
@@ -1685,7 +1514,6 @@ for i = 1:n_trs_tot
             checkLick(); 
             
             if strcmp(reward_on, 'location')
-                %disp(loop_brk_ctr)
                 if location_require_quality
                     qual_check = eyetracker_qual(idx_all)<2;
                 else
@@ -1696,7 +1524,6 @@ for i = 1:n_trs_tot
                     if curr_in_bb && qual_check
                         rsvp_break_ctr = 0;
                         % sample command trigger starts
-                        
                     elseif (~curr_in_bb || ~qual_check)
                         rsvp_break_ctr = rsvp_break_ctr + 1;
                         %rsvp_break_ctr
@@ -1787,12 +1614,7 @@ for i = 1:n_trs_tot
                 calib_t_clip(i,clip_ctr) = frame_t;
                 clip_ctr = clip_ctr+1;
             end
-%             if ~isempty(tex1)    %tex1
-%                 Screen('Close', tex1);
-%                 Screen('Close', tex2);
-%                 tex1 = [];
-%                 tex2 = [];
-%             end
+
         end
         
         if fix_exp_mode && rsvpfridx >= stim_frames
@@ -2089,7 +1911,7 @@ if profile_memory
     assignin('base', 'avail_phys_mem', avail_phys_mem);
 end
 
-%% gather data for save
+%% SAVE: gather data for save into structures
 calib.n_pts_x = n_pts_x;
 calib.n_pts_y = n_pts_y;
 calib.trs_per_location = trs_per_location;
@@ -2258,10 +2080,10 @@ punish.length_ms = punish_length_ms;
 punish.play_sound = play_punish_sound;
 punish.sound_file = punish_sound_file;
 
-
-%% save data
+%% SAVE: save data
 savefname = sprintf('calib_%s_%s.mat', subject, session_time);
 settings.data_file_name = savefname; 
+save_full = fullfile(save_data_dir, savefname); % output variable
 save(fullfile(save_data_dir, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
 fprintf('session data saved to %s\n', fullfile(save_data_dir, savefname));
 
@@ -2278,27 +2100,12 @@ catch me
     disp('failed to save session data to remote');
 end
 
-
-%% add to subject log table automatically
+%% SAVE: add to subject log table automatically
 log_dir = 'C:/MATLAB/Marmulator/subject_logs_bysessions';
 logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
-%% execute plots automatically
-
-save_full = fullfile(save_data_dir, savefname); 
-% try
-%     if contains(calib_settings.expt_params,'center_point')
-%         get_mean_x_y_pts(fullfile(save_data_dir, savefname))
-%     end
-% catch me
-%     disp('Attempted to run get_mean_x_y_pts.m'); 
-% end
-
-%%% NESTED FUNCTIONS FOR DRAWING ON SCREEN
+%% SUPPORT FUNCTIONS: nested
     function [eyeposx_cur, eyeposy_cur, eye_data_qual] = get_eyetracker_draw_dots()
-        %[eyepos_x(idx_all), eyepos_y(idx_all)] = vpx_GetGazePointCorrected(eye);
-        %[eyepos_x_tmp, eyepos_y_tmp] = vpx_GetPupilPoint(eye);
-        
         switch eye_method
             case 'pupil-glint'
                 [eyepos_x_tmp, eyepos_y_tmp] = vpx_GetDiffVector(eye);
@@ -2327,7 +2134,7 @@ save_full = fullfile(save_data_dir, savefname);
         eyetracker_qual(idx_all) = eye_data_qual;
         
         if apply_calib
-            if ~isempty(cProj)
+            if ~isempty(cProj) % PROJECTIVE
                 raw_eye = [eyepos_x_tmp,eyepos_y_tmp];
                 T = [cX,cY,cProj];
                 transformed_eye = homography_transform(raw_eye,T);
@@ -2350,11 +2157,6 @@ save_full = fullfile(save_data_dir, savefname);
                     eyepos_y(idx_all) = eyepos_y_tmp*cY(2) + cY(1);
                 end
             end
-            
-            %eyepos_x(idx_all) = eyepos_x_tmp*cX(1) + eyepos_y_tmp*cX(2) + cX(3);
-            %eyepos_y(idx_all) = eyepos_y_tmp*cY(1) + eyepos_x_tmp*cY(2) + cY(3);
-            % fprintf('eyepos raw: %0.2f, %0.2f; pix: %0.1f, %0.1f\n', eyepos_x_tmp, eyepos_y_tmp,...
-            %    eyepos_x(idx_all),  eyepos_y(idx_all));
         else
             if ~isempty(gaze_offset_x)
                 eyepos_x(idx_all) = eyepos_x_tmp + gaze_offset_x;
@@ -2508,7 +2310,6 @@ save_full = fullfile(save_data_dir, savefname);
     end
 
     function pumpReward_updateGUI()
-        %%%% UNCOMMENT 
         writeline(reward_pumphand, 'RUN');
         set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
         drawnow;
@@ -2516,10 +2317,9 @@ save_full = fullfile(save_data_dir, savefname);
 
 end
 
-
+%% SUPPORT FUNCTIONs: subfunction
 function draw_coords = ret_dots_in_rect(x,y,disp_rect,eye_rect)
-%sca
-%keyboard
+
 disp_ht = disp_rect(4)-disp_rect(2);
 disp_len = disp_rect(3)-disp_rect(1);
 
@@ -2529,7 +2329,6 @@ eyewin_ht = (eye_rect(4) - eye_rect(2))*disp_ht;
 eyewin_len = (eye_rect(3) - eye_rect(1))*disp_len;
 
 % scale x
-%draw_coords(1,:) = round(((1-x)*eyewin_len) + eyewin_xoffset);
 draw_coords(1,:) = round((x*eyewin_len) + eyewin_xoffset);
 
 % scale y
