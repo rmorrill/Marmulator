@@ -10,26 +10,23 @@ profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
 
-newPriority = 1; 
-oldPriority = Priority(newPriority); 
+newPriority = 1;
+oldPriority = Priority(newPriority);
 fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
 PsychJavaSwingCleanup;
 
 % mkTurk_data_save_flag
-mkTurk_data_save = 0; 
+mkTurk_data_save = 0;
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
-    
     if isfield(c,'coeff_Proj')
         cProj = c.coeff_Proj; % 3 x 3 matrix
     else
         cProj = [];
     end
-    
     cX = c.coeff_X;
     cY = c.coeff_Y;
-    
     apply_calib = 1;
 else
     cY = nan(1,3);
@@ -66,31 +63,29 @@ if ~isempty(trigger_arduino)
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
     WaitSecs(0.05);
     if ~isempty(sampleCommand_trig_cmd)
-        IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1); 
-        WaitSecs(0.05); 
+        IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
+        WaitSecs(0.05);
     end
 else
     trig_flag = false;
-    fprintf('WARNING: NO TRIGGER ARDUINO HANDLE PROVIDED!\nTriggers will not be recorded\n');  
+    fprintf('WARNING: NO TRIGGER ARDUINO HANDLE PROVIDED!\nTriggers will not be recorded\n');
 end
 
 if ~isempty(lick_arduino)
     lick_hand = lick_arduino.ahand;
     lick_flag = true;
-    %lick_rect = [1490, 890, 1530, 930];
     rew_trs_since_lick = NaN;
-    stop_rewards_n_nolicks = 4;
     lick_times_all = nan(1,1e5);
     lick_idx = 0;
     Alphabet = 'abcdefghijklmnopqrstuvwxyz';
     read_lick_cmd = ['1' Alphabet(lick_arduino.lick_pin + 1)];
-    lick_arduino_pin = lick_arduino.lick_pin; 
+    lick_arduino_pin = lick_arduino.lick_pin;
 else
     rew_trs_since_lick = NaN;
-    lick_flag = false; 
-    lick_times_all = []; 
+    lick_flag = false;
+    lick_times_all = [];
     lick_arduino_pin = [];
-    fprintf('WARNING: NO LICKOMETER ARDUINO HANDLE PROVIDED!\nLicks will not be recorded\n');  
+    fprintf('WARNING: NO LICKOMETER ARDUINO HANDLE PROVIDED!\nLicks will not be recorded\n');
 end
 
 %% photodiode flash
@@ -102,12 +97,12 @@ flash_rect_size = [90 90];
 s = load(expt_params);
 %ctrl_screen = false;
 ctrl_screen = true;
-multiflip = 0; 
-multiflip2 = 0; 
+multiflip = 0;
+multiflip2 = 0;
 dontclear = 0;
-dontclear2 = 0; 
-dontsync = 0; 
-dontsync2 = 1; 
+dontclear2 = 0;
+dontsync = 0;
+dontsync2 = 1;
 
 % unpack everything
 save_params_name = s.save_params_name;
@@ -208,6 +203,30 @@ else
     stimulus_pre_dot_disappear = 0;
 end
 
+if isfield(s, 'stop_rewards_n_nolicks')
+    stop_rewards_n_nolicks = s.stop_rewards_n_nolicks;
+else
+    stop_rewards_n_nolicks = 4;
+end
+
+if strcmp(stim_mode, 'match_to_sample')
+    m2s_mode = true; % match to sample mode 
+    %search_grid = s.search_grid;
+    test_bb_size_x = s.test_bb_size_x; 
+    test_bb_size_y = s.test_bb_size_y; 
+    test_img_len = s.test_img_len; 
+    test_img_ht = s.test_img_ht
+    dots_on_test_grid = s.dots_on_test_grid; 
+    task_folder = s.task_folder; 
+    if isfield(s, 'task_params_file')
+        task_params_file = s.task_params_file; 
+    else
+        task_params_file = ''; 
+    end
+else
+    m2s_mode = false; 
+end
+
 %% fixation mode/rsvp setup
 % fix mode will use presentation time for each stimulus duration
 if isfield(s, 'rsvp_iti_t')
@@ -231,9 +250,9 @@ else
 end
 
 if isfield(s, 'constant_bg_mode')
-    constant_bg_mode = s.constant_bg_mode; 
+    constant_bg_mode = s.constant_bg_mode;
 else
-    constant_bg_mode = false; 
+    constant_bg_mode = false;
 end
 
 if give_punishments
@@ -247,7 +266,7 @@ gaze_center_adj_y = setup_config.default_gaze_center_adjust(2);
 apply_gaze_center_adj = true;
 
 
-bonus_reward_min_wait = 1; % give bonus rewards at most every 1s 
+bonus_reward_min_wait = 1; % give bonus rewards at most every 1s
 
 start_rew_vol_str = get(reward_today_hand, 'String');
 start_reward_vol = str2double(char(regexp(start_rew_vol_str, '\d*\.\d*', 'match')));
@@ -273,9 +292,9 @@ end
 
 esc_key = KbName('ESC');
 rew_end_key = KbName('r');
-bonus_rew_key = KbName('b'); 
-wake_up_movie_key = KbName('v'); 
-wake_up_movie_terminate_key = KbName('t'); 
+bonus_rew_key = KbName('b');
+wake_up_movie_key = KbName('v');
+wake_up_movie_terminate_key = KbName('t');
 
 %% SETUP: eyetracker-related
 eye_rect = [0 0 1 1] ;
@@ -333,97 +352,96 @@ rgba_cols = [gaze_pt_dot_cols; alphas];
 dotsz = gaze_pt_sz;
 
 %% SETUP: image presentation mode
-EXT = {'.tiff','.png','.jpg','.jpeg'};
-img_folder_idx = [];
+
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
-    if iscell(img_folder)
-        img_fnames = [];
-        img_folder_idx = [];
-        for i = 1:numel(img_folder)
-            img_fnames_tmp = dir(img_folder{i});
-            [~,~,e] = fileparts({img_fnames_tmp.name}); 
-            img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
-            img_fnames_tmp = fullfile(img_folder{i}, {img_fnames_tmp.name});
-            img_fnames = [img_fnames img_fnames_tmp];
-            img_folder_idx = [img_folder_idx, i* ones(1,length(img_fnames_tmp))];
-        end
-    else
-        img_fnames_tmp = dir(img_folder);
-        [~,~,e] = fileparts({img_fnames_tmp.name});
-        img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
-        img_fnames = fullfile(img_folder, {img_fnames_tmp.name});
-        img_folder_idx = ones(1,length(img_fnames));
-    end
+    
+    [img_fnames, img_folder_idx] = ret_image_fnames(img_folder);
     
     if constant_bg_mode % then exclude background stimuli from the list
-        [~,imnames_tmp] = fileparts(img_fnames); 
-        rmidx = contains(imnames_tmp, 'background_'); 
-        img_fnames = img_fnames(~rmidx); 
-        img_folder_idx = img_folder_idx(~rmidx); 
+        [~,imnames_tmp] = fileparts(img_fnames);
+        rmidx = contains(imnames_tmp, 'background_');
+        img_fnames = img_fnames(~rmidx);
+        img_folder_idx = img_folder_idx(~rmidx);
     end
     
-    imgs = cell(1,numel(img_fnames));
-    
-    fprintf('Reading %d stim images\n', numel(img_fnames)); 
-    t_pre_imread = GetSecs(); 
-    for i = 1:numel(img_fnames)
-        %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
-        [img_tmp, ~,alpha] = imread(img_fnames{i});
-        fprintf('.')
-        if ~isempty(alpha)
-            img_tmp(:,:,4) = alpha;
-        end
-        imgs{i} = img_tmp;
-        im_ht(i) = size(imgs{i}, 1);
-        im_wd(i) = size(imgs{i}, 2);
-        ar(i) = im_wd(i)/im_ht(i);
-        if mod(i, 100) == 0 
-            fprintf('\n'); 
-        end
-    end
-    t_post_imread = GetSecs(); 
-    fprintf('\nThat took %0.2f s\n', t_post_imread - t_pre_imread); 
+    [imgs, im_ht, im_wd, ar] = load_images(img_fnames);
     n_imgs = numel(imgs);
+    
+    [unique_img_folder,~,ic] = unique(img_folder_idx);
+    n_imgs_per_folder = accumarray(ic,1);
+else
+    img_folder_idx = []; 
 end
 
-[unique_img_folder,~,ic] = unique(img_folder_idx);
-n_imgs_per_folder = accumarray(ic,1);
-
 %% SETUP: constant background mode (new 2/2023)
-if constant_bg_mode % read the backgrounds separately 
-    % go through folders and search for a 'background_*.*' images in each    if iscell(img_folder)
+if constant_bg_mode % read the backgrounds separately
+    % go through folders and search for a 'background_*.*' images in each
     if iscell(img_folder)
         bg_img_fnames = [];
         for i = 1:numel(img_folder)
             bg_img_fnames_tmp = dir(fullfile(img_folder{i}, 'background_*'));
-            if numel(bg_img_fnames_tmp)~= 1 
-                error('number of possible backgrounds in folder %s does not equal 1\nlabel background images as "background_*"', img_folder{i}); 
+            if numel(bg_img_fnames_tmp)~= 1
+                error('number of possible backgrounds in folder %s does not equal 1\nlabel background images as "background_*"', img_folder{i});
             end
-            [~,~,e] = fileparts({bg_img_fnames_tmp.name}); 
-            bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
+            [~,~,e] = fileparts({bg_img_fnames_tmp.name});
+            bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
             bg_img_fnames_tmp = fullfile(img_folder{i}, {bg_img_fnames_tmp.name});
             bg_img_fnames = [bg_img_fnames bg_img_fnames_tmp];
         end
     else
         bg_img_fnames_tmp = dir(fullfile(img_folder, 'background_*'));
-        [~,~,e] = fileparts({bg_img_fnames_tmp.name}); 
-        bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
+        [~,~,e] = fileparts({bg_img_fnames_tmp.name});
+        bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
         bg_img_fnames = fullfile(img_folder, {bg_img_fnames_tmp.name});
     end
     
-    bg_imgs = cell(1,numel(bg_img_fnames));
-    for i = 1:numel(bg_img_fnames)
-        %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
-        [bg_img_tmp, ~,alpha] = imread(bg_img_fnames{i});
-        if ~isempty(alpha)
-            bg_img_tmp(:,:,4) = alpha;
-        end
-        bg_imgs{i} = bg_img_tmp;
-        bg_im_ht(i) = size(bg_imgs{i}, 1);
-        bg_im_wd(i) = size(bg_imgs{i}, 2);
-        bg_ar(i) = bg_im_wd(i)/bg_im_ht(i);
-    end
+    [bg_imgs, bg_im_ht, bg_im_wd, bg_ar] = load_images(bg_img_fnames);
     n_bg_imgs = numel(bg_imgs);
+end
+
+%% SETUP: match_to_sample mode
+if m2s_mode
+    
+    n_rsvp = 2; % overwrite n_rsvp
+    
+    % load the task file
+    if ~isempty(task_params_file)
+        taskfile = dir(fullfile(task_folder, task_params_file));
+    else
+        assert(length(taskfile) == 1, sprintf('Number of possible taskfiles in %s does not equal 1', task_folder));
+        taskfile = dir(fullfile(task_folder, '*task_params*.mat'));
+    end
+    
+    tf_tmp = load(fullfile(taskfile.folder, taskfile.name));
+    tf = tf_tmp.task;
+    
+    % load all sample_imgs
+    %[sample_img_fnames, ~] = ret_image_fnames(tf.sample_img_folder)
+    sample_img_fnames = fullfile(tf.sample_img_folder, tf.sample_img_names);
+    [sample_imgs, sample_im_ht, sample_im_wd, sample_ar] = load_images(sample_img_fnames);
+    
+    % load all test imgs
+    test_img_fnames = fullfile(tf.test_img_folder, tf.test_img_names);
+    [test_imgs, test_im_ht, test_im_wd, test_ar] = load_images(test_img_fnames);
+    n_test_imgs = numel(test_img_fnames);
+    m2s_img_seq = zeros(n_rsvp, n_test_imgs);
+    for i = 1:n_test_imgs
+        m2s_img_seq(1,i) = tf.target_ID(i);
+        m2s_img_seq(2,i) = i;
+    end
+    
+    % convert the test grid (in fractional coordinates) to pix relative to im center 
+    test_pts = tf.test_grid .* [test_img_len, test_img_ht]; 
+    test_img_x_cent = round(test_img_len/2); 
+    test_img_y_cent = round(test_img_ht/2);     
+    test_pts(:,1) = test_pts(:,1) - test_img_x_cent; 
+    test_pts(:,2) = test_pts(:,2) - test_img_y_cent;
+
+    %sca; keyboard
+   % if apply_gaze_center_adj
+    %    test_pts(:,2) = test_pts(:,2) + gaze_center_adj_y;
+   %     test_pts(:,1) = test_pts(:,1) + gaze_center_adj_x;
+    %end
 end
 
 %% SETUP: wake up images
@@ -450,9 +468,9 @@ else
 end
 
 if wake_up_trials
-    wu_image_fname_list = {}; 
+    wu_image_fname_list = {};
     if iscell(wake_up_img_fold)
-        wake_up_imgs = {}; 
+        wake_up_imgs = {};
         for j = 1:length(wake_up_img_fold)
             wu_img_d = dir(wake_up_img_fold{j});
             wu_img_d = wu_img_d(~[wu_img_d.isdir]);
@@ -502,12 +520,12 @@ Screen('Preference', 'TextRenderer', 0);
 % get colors
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
-whitecol_interrsvp = whitecol *0.8; 
-blackcol_interrsvp = whitecol * 0.2; 
+whitecol_interrsvp = whitecol *0.8;
+blackcol_interrsvp = whitecol * 0.2;
 graycol = (whitecol + blackcol)/2;
 
-%rect_col = [255 0 0]; 
-rect_col = graycol; 
+%rect_col = [255 0 0];
+rect_col = graycol;
 
 switch bg_col
     case 'gray'
@@ -519,12 +537,12 @@ switch bg_col
 end
 
 %fprintf('GUI MODE\n\n')
-%window_rect = [ 0   0 2000 864]; 
-%screenid_stim = 1; 
+%window_rect = [ 0   0 2000 864];
+%screenid_stim = 1;
 [win, win_rect] = Screen('OpenWindow', screenid_stim, bg_col_val, window_rect);
 %ctrl_rect_debug = [0 0 1650 1200];
 shrink_factor = 0.5;
-ctrl_rect_debug = shrink_factor * win_rect; 
+ctrl_rect_debug = shrink_factor * win_rect;
 
 screen_hz = Screen('NominalFrameRate', screenid_stim);
 ifi=Screen('GetFlipInterval', win);
@@ -542,8 +560,8 @@ if ctrl_screen; [win_ctrl, win_rect_ctrl] = Screen('OpenWindow', screenid_ctrl, 
 %[win0, winRect0] = Screen('OpenWindow', screenId, bgcolor * 255, [0 0 300 300], [], [], [], [], [], kPsychGUIWindow);
 Screen('BlendFunction', win, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 
-HideCursor(screenid_stim); 
-HideCursor(screenid_ctrl); 
+HideCursor(screenid_stim);
+HideCursor(screenid_ctrl);
 
 if ctrl_screen
     Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
@@ -562,6 +580,15 @@ if apply_gaze_center_adj
     x_cent = x_cent + gaze_center_adj_x;
 end
 
+if m2s_mode
+    % put test pts into screen space
+    test_pts(:,1) = test_pts(:,1) + x_cent; 
+    test_pts(:,2) = test_pts(:,2) + y_cent; 
+    %sca; 
+    %keyboard
+end
+
+
 %% TRIGGER: turn on session trigger
 if trig_flag
     IOPort('Write', trig_hand, sess_trig_cmd.on, 1);
@@ -570,12 +597,12 @@ if trig_flag
     
     % send file barcode to sample command line
     if ~isempty(sampleCommand_trig_cmd)
-        time_str = replace(session_time(12:end),'-',''); 
+        time_str = replace(session_time(12:end),'-','');
         for i = 1:length(time_str)
             IOPort('Write',trig_hand,sampleCommand_trig_cmd.on,1);
             WaitSecs(0.01 * str2double(time_str(i)));
             IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
-            WaitSecs(0.025); 
+            WaitSecs(0.025);
         end
     end
 end
@@ -591,46 +618,66 @@ if color_shift_feedback
 end
 
 %% LOAD: preload all textures
- % load all image textures 
- if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
-     %imgs_texture = cell(1,length(imgs));
-     %imgs_texture_ctrl = cell(1,length(imgs));
-     imgs_texture = zeros(1,length(imgs));
-     imgs_texture_ctrl = zeros(1,length(imgs));
-     for i = 1:length(imgs)
-         %imgs_texture{i} = Screen('MakeTexture', win,imgs{i});
-         imgs_texture(i) = Screen('MakeTexture', win,imgs{i});
-         %Screen('PreloadTextures', win,imgs_texture{i});
-         Screen('PreloadTextures', win,imgs_texture(i));
-         if ctrl_screen
-             %imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,imgs{i});
-             imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,imgs{i});
-             %Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i});
-             Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl(i));
-         end
-     end
-     
-     
-     if constant_bg_mode
-         bg_imgs_texture = zeros(1,length(bg_imgs));
-         bg_imgs_texture_ctrl = zeros(1,length(bg_imgs));
-         for i = 1:length(bg_imgs)
-             bg_imgs_texture(i) = Screen('MakeTexture', win,bg_imgs{i});
-             Screen('PreloadTextures', win,bg_imgs_texture(i));
-             if ctrl_screen
-                 bg_imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,bg_imgs{i});
-                 Screen('PreloadTextures',win_ctrl,bg_imgs_texture_ctrl(i));
-             end
-         end
-     end
- end
+% load all image textures
+if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
+    imgs_texture = zeros(1,length(imgs));
+    imgs_texture_ctrl = zeros(1,length(imgs));
+    for i = 1:length(imgs)
+        imgs_texture(i) = Screen('MakeTexture', win,imgs{i});
+        Screen('PreloadTextures', win,imgs_texture(i));
+        if ctrl_screen
+            imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,imgs{i});
+            Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl(i));
+        end
+    end
+    
+    
+    if constant_bg_mode
+        bg_imgs_texture = zeros(1,length(bg_imgs));
+        bg_imgs_texture_ctrl = zeros(1,length(bg_imgs));
+        for i = 1:length(bg_imgs)
+            bg_imgs_texture(i) = Screen('MakeTexture', win,bg_imgs{i});
+            Screen('PreloadTextures', win,bg_imgs_texture(i));
+            if ctrl_screen
+                bg_imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,bg_imgs{i});
+                Screen('PreloadTextures',win_ctrl,bg_imgs_texture_ctrl(i));
+            end
+        end
+    end
+elseif m2s_mode
+    % load SAMPLE images 
+    sample_imgs_texture = zeros(1,length(sample_imgs));
+    sample_imgs_texture_ctrl = zeros(1,length(sample_imgs));
+    for i = 1:length(sample_imgs)
+        sample_imgs_texture(i) = Screen('MakeTexture', win,sample_imgs{i});
+        Screen('PreloadTextures', win,sample_imgs_texture(i));
+        if ctrl_screen
+            sample_imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,sample_imgs{i});
+            Screen('PreloadTextures',win_ctrl,sample_imgs_texture_ctrl(i));
+        end
+    end
+    
+    % load TEST images
+    test_imgs_texture = zeros(1,length(test_imgs));
+    test_imgs_texture_ctrl = zeros(1,length(test_imgs));
+    for i = 1:length(test_imgs)
+        test_imgs_texture(i) = Screen('MakeTexture', win,test_imgs{i});
+        Screen('PreloadTextures', win,test_imgs_texture(i));
+        if ctrl_screen
+            test_imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,test_imgs{i});
+            Screen('PreloadTextures',win_ctrl,test_imgs_texture_ctrl(i));
+        end
+    end
+    
+end
+
 
 %% LOAD: load all wake up images
 if wake_up_trials
     %wu_imgs_texture = cell(1,length(wake_up_imgs));
-    %wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
+    %wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs));
     wu_imgs_texture = zeros(1,length(wake_up_imgs));
-    wu_imgs_texture_ctrl = zeros(1,length(wake_up_imgs)); 
+    wu_imgs_texture_ctrl = zeros(1,length(wake_up_imgs));
     for i = 1:length(wake_up_imgs)
         %wu_imgs_texture{i} = Screen('MakeTexture',win,wake_up_imgs{i});
         wu_imgs_texture(i) = Screen('MakeTexture',win,wake_up_imgs{i});
@@ -641,7 +688,7 @@ if wake_up_trials
     end
 end
 
-% wake_up movies (keyboard v) 
+% wake_up movies (keyboard v)
 if isfield(s,'wake_up_movie')
     moviefiles_all = dir(s.wake_up_movie);
     movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
@@ -656,7 +703,7 @@ if strcmp(stim_mode, 'movie')
     movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
     moviePtr = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64);
     Screen('PlayMovie', moviePtr, movie_rate, 1);
-    WaitSecs(1); 
+    WaitSecs(1);
 end
 
 %% SETUP: set up stimulus locations on screen
@@ -698,6 +745,9 @@ if isfield(s,'add_center')
         end
     end
 end
+
+%sca
+%keyboard 
 
 %% SETUP: spinning: DEPRECATED???
 if strcmp(stim_mode,'spinning')
@@ -765,22 +815,21 @@ if strcmp(stim_mode,'smooth pursuit')
 end
 
 %% SETUP: img sequence
-n_trs_requested = n_calib_pts*trs_per_location;
-
 if strcmp(stim_mode, 'images')
+    n_trs_requested = n_calib_pts*trs_per_location;
     if constant_bg_mode
         n_reps = ceil(n_trs_requested*n_rsvp/sum(n_imgs_per_folder));
         img_seq = [];
         bg_seq = [];
         for i = 1:length(unique_img_folder)
-            stidx = sum(n_imgs_per_folder(1:i-1))+1; 
+            stidx = sum(n_imgs_per_folder(1:i-1))+1;
             img_seq_tmp = repmat(stidx:stidx+sum(n_imgs_per_folder(i))-1, [1, n_reps]);
             n_trs_per_folder(i) = floor(length(img_seq_tmp)/n_rsvp);
             n_stim_per_folder(i) = n_trs_per_folder(i) * n_rsvp;
             img_seq_tmp = img_seq_tmp(1:n_stim_per_folder(i));
             ridx_tmp = randperm(length(img_seq_tmp));
             img_seq_rnd = img_seq_tmp(ridx_tmp);
-            img_seq = [img_seq; reshape(img_seq_rnd, [numel(img_seq_rnd)/n_rsvp, n_rsvp])]; 
+            img_seq = [img_seq; reshape(img_seq_rnd, [numel(img_seq_rnd)/n_rsvp, n_rsvp])];
             bg_seq = [bg_seq; ones(n_trs_per_folder(i), 1)*i];
         end
         
@@ -788,7 +837,7 @@ if strcmp(stim_mode, 'images')
         tr_ridx = randperm(numel(bg_seq));
         bg_seq = bg_seq(tr_ridx, :);
         img_seq = img_seq(tr_ridx, :);
-        img_seq = img_seq'; 
+        img_seq = img_seq';
         
     elseif strcmp(image_order, 'random')
         n_rsvps = n_trs_requested*n_rsvp;
@@ -811,7 +860,7 @@ if strcmp(stim_mode, 'images')
         img_seq = [];
         for i = 1:length(unique_img_folder)
             n_rsvps = n_trs_requested/length(unique_img_folder)*n_rsvp;
-            x = floor(n_rsvps/n_imgs_per_folder(i)); 
+            x = floor(n_rsvps/n_imgs_per_folder(i));
             if i > 1
                 idx_start = n_imgs_per_folder(i-1);
             else
@@ -821,13 +870,13 @@ if strcmp(stim_mode, 'images')
                 for q = 1:x
                     img_seq = [img_seq randperm(n_imgs_per_folder(i))+idx_start];
                 end
-                img_seq = [img_seq randperm(n_imgs_per_folder(i),mod(n_rsvps,n_imgs_per_folder(i)))+idx_start]; 
+                img_seq = [img_seq randperm(n_imgs_per_folder(i),mod(n_rsvps,n_imgs_per_folder(i)))+idx_start];
             else
                 img_seq = [img_seq randperm(n_imgs_per_folder(i), n_rsvps)+idx_start];
             end
         end
         
-    else % sequential presentation 
+    else % sequential presentation
         n_rsvps = n_trs_requested*n_rsvp;
         x = floor(n_rsvps/n_imgs);
         img_seq = [repmat(1:n_imgs, 1, x) 1:mod(n_rsvps, x*n_imgs)];
@@ -837,19 +886,37 @@ if strcmp(stim_mode, 'images')
         img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
     end
     
-    n_trs_curr = size(img_seq, 2); 
+    n_trs_curr = size(img_seq, 2);
+elseif m2s_mode
+    n_trs_requested = trs_per_location;
+    x = floor(n_trs_requested/n_test_imgs);
+    if x>0
+        img_seq = [];
+        for q = 1:x
+            img_seq = [img_seq randperm(n_test_imgs)];
+        end
+        img_seq = [img_seq randperm(n_test_imgs, mod(n_trs_requested, n_test_imgs))];
+    else
+        img_seq = randperm(n_test_imgs, n_trs_requested);
+    end
+    img_seq = m2s_img_seq(:,img_seq);
+    n_trs_curr = n_trs_requested;
+
+    target_img_seq = img_seq(2,:); 
+    target_idx = tf.target_location(target_img_seq); % which location is the correct one? 
 else
+    n_trs_requested = n_calib_pts*trs_per_location;
     img_seq = [];
     image_displayed = [];
-    n_trs_curr = n_trs_requested; 
+    n_trs_curr = n_trs_requested;
 end
 
 %% SETUP: trial sequence
 if strcmp(image_order,'block')
-    trs_per_location = trs_per_location * length(unique_img_folder); 
+    trs_per_location = trs_per_location * length(unique_img_folder);
 end
 
-tr_seq = []; 
+tr_seq = [];
 if strcmp(position_order, 'random')
     for q = 1:ceil(n_trs_curr/n_calib_pts)
         tr_seq = [tr_seq randperm(n_calib_pts)];
@@ -858,10 +925,10 @@ else
     tr_seq = repmat(1:n_calib_pts,1,ceil(n_trs_curr/n_calib_pts));
 end
 
-tr_seq = tr_seq(1:n_trs_curr); 
+tr_seq = tr_seq(1:n_trs_curr);
 
-% wake_up images
-if wake_up_trials
+%% SETUP: wake_up images
+if wake_up_trials && ~m2s_mode % for now, m2s doesn't work with wakeup images
     %y = nan(1,n_trs_requested);
     y = nan(1,n_trs_curr);
     z = [tr_seq; y];
@@ -892,8 +959,8 @@ if wake_up_trials
             if constant_bg_mode
                 bg_seq = [bg_seq(1:wu_tr_idx_curr-1); 0; bg_seq(wu_tr_idx_curr:end)];
             end
-        end        
-    end   
+        end
+    end
     
 else
     n_wake_up_trs = 0;
@@ -907,16 +974,16 @@ if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
 end
 
 % desired trial clip sequence
-if stimulus_pre_dot 
-    clip_sequence = {'fixation pt','stimulus'}; 
+if stimulus_pre_dot
+    clip_sequence = {'fixation pt','stimulus'};
     if require_fix_tr_init == 1
         clip_sequence_t = [0,fixation_to_init];
     else
-       clip_sequence_t = [0, stimulus_pre_time];
+        clip_sequence_t = [0, stimulus_pre_time];
     end
-
+    
 else
-    clip_sequence = {'stimulus'}; 
+    clip_sequence = {'stimulus'};
     clip_sequence_t = [0];
 end
 
@@ -940,7 +1007,7 @@ end
 if lick_flag
     lick_trial = false(1,n_trs_tot);
 else
-    lick_trial = []; 
+    lick_trial = [];
 end
 
 % calculate frames per stim, iti
@@ -957,15 +1024,18 @@ end
 
 % set up bounding boxes for display on the control screen
 cols = round(distinguishable_colors(n_calib_pts+1)*255);
+
 bounding_rect_tmp = [0,0,bounding_rect_size_x, bounding_rect_size_y];
+
 if ~isempty(manual_bounding_boxes)
     if apply_gaze_center_adj
         manual_bounding_boxes = OffsetRect(manual_bounding_boxes, gaze_center_adj_x, gaze_center_adj_y);
     end
     bounding_rects = manual_bounding_boxes;
 else
-    bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2));
+    bounding_rects = CenterRectOnPoint(bounding_rect_tmp, all_pts(:,1), all_pts(:,2)); % all_pts is already gaze center adjusted
 end
+
 
 bounding_rect_stim_pre_dot_tmp = [0,0,bounding_rect_size_stim_pre_dot_x, bounding_rect_size_stim_pre_dot_y];
 if ~isempty(manual_bounding_boxes_stim_pre_dot)
@@ -977,22 +1047,30 @@ else
     bounding_rects_stim_pre_dot = CenterRectOnPoint(bounding_rect_stim_pre_dot_tmp,all_pts(:,1),all_pts(:,2));
 end
 
+if m2s_mode
+    % define test bounding boxes 
+    test_bounding_rect_tmp = [0,0,test_bb_size_x, test_bb_size_y];
+    test_bounding_rects = CenterRectOnPoint(test_bounding_rect_tmp, test_pts(:,1), test_pts(:,2)); 
+end
+
+
 %% SETUP: Reward and Punish sound handles using PsychPortAudio
 audio_handle = [];
 % reward
-[aud_y, aud_fs] = psychwavread(reward_sound_file); 
-[samplecount,ninchannels] = size(aud_y); 
-aud_y = repmat(aud_y',2/ninchannels,1); 
+[aud_y, aud_fs] = psychwavread(reward_sound_file);
+[samplecount,ninchannels] = size(aud_y);
+aud_y = repmat(aud_y',2/ninchannels,1);
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
 audio_handle(1) = PsychPortAudio('Open', 1, [], 1, aud_fs,2, [],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(1), aud_y);
 
 % punish
-[aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file); 
-[samplecount,ninchannels] = size(aud_pun_y); 
-aud_pun_y = repmat(aud_pun_y',2/ninchannels,1); 
+[aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file);
+[samplecount,ninchannels] = size(aud_pun_y);
+aud_pun_y = repmat(aud_pun_y',2/ninchannels,1);
 audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(2), aud_pun_y);
+
 %%
 if iti_random
     iti_frames = round((rand(1,n_trs_tot)*diff(inter_stim_interval)+inter_stim_interval(1))/1e3/ifi);
@@ -1048,17 +1126,17 @@ stim_pre_end = nan(1,n_trs_tot);
 trial_init_timed_out = false(1,n_trs_tot);
 calib_st_t = nan(1,n_trs_tot);
 calib_end_t = nan(1,n_trs_tot);
-calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t)); 
-calib_frame_st_t = cell(1,n_trs_tot); 
-calib_frame_clip_num = cell(1,n_trs_tot); 
+calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t));
+calib_frame_st_t = cell(1,n_trs_tot);
+calib_frame_clip_num = cell(1,n_trs_tot);
 wake_up_image_displayed = cell(1, n_trs_tot);
 
 reward_ct = 0;
 man_reward_ct = 0;
-bonus_reward_ct = 0; 
-bonus_reward_t = []; 
+bonus_reward_ct = 0;
+bonus_reward_t = [];
 wu_mov_start_t = [];
-wu_mov_end_t = []; 
+wu_mov_end_t = [];
 exit_flag = 0;
 mov_dur = [];
 fix_pre_fr_ctr = 0;
@@ -1083,21 +1161,29 @@ for i = 1:n_trs_tot
     seqidx = tr_seq(i);
     stfridx = 0;
     rsvpfridx = 0;
-    interrsvpfridx = 0; 
+    rsvp_ctr = 1; 
+    interrsvpfridx = 0;
     loop_brk_ctr = 0;
     pre_stim_timer = 0;
-    manual_reward_flag = false; % has a manual reward been given on the trial yet? 
+    manual_reward_flag = false; % has a manual reward been given on the trial yet?
     entered_bb = false; % did eye go into bb?
-    skip_reward = 0; 
+    skip_reward = 0;
     frame_st_t = [];
-    frame_clip_num = []; 
-    t_dur = []; 
+    frame_clip_num = [];
+    t_dur = [];
     
     if seqidx ~= 0
         xcurr = all_pts(seqidx,1);
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
-        curr_bb = bounding_rects(seqidx,:);
+        if m2s_mode % we need sample and test bounding boxes
+            sample_bb = bounding_rects(seqidx,:); 
+            test_bb = test_bounding_rects(target_idx(curr_tr),:);
+            curr_bb = sample_bb; 
+        else
+            curr_bb = bounding_rects(seqidx,:);
+        end
+        
         curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:);
     else
         % put stim rect around center
@@ -1109,19 +1195,19 @@ for i = 1:n_trs_tot
         
         if wake_up_reward == 0
             skip_reward = 1;
-            reward_this_trial = 0; 
+            reward_this_trial = 0;
         end
     end
     
     idx_all = idx_all +1;
-
+    
     drawInfoText();
     drawBoundingBoxes();
     if draw_retain_bb_pts
         drawGoodEyePts(0);
     end
     get_eyetracker_draw_dots();
-    checkLick(); 
+    checkLick();
     
     Screen('FillRect', win, bg_col_val)
     vbl = Screen('Flip', win);
@@ -1134,13 +1220,13 @@ for i = 1:n_trs_tot
     for j = 1:iti_frames(i)
         idx_all = idx_all +1;
         drawInfoText();
-
+        
         drawBoundingBoxes();
         if draw_retain_bb_pts
             drawGoodEyePts(0);
         end
-        checkLick(); 
-
+        checkLick();
+        
         vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
         get_eyetracker_draw_dots();
@@ -1151,9 +1237,9 @@ for i = 1:n_trs_tot
     fix_pre_fr_ctr = 0;
     blink_ctr = 0;
     trial_trig_hi = 0;
-    sampleCommand_trig_hi = 0; 
-    clip_ctr = 1; 
-
+    sampleCommand_trig_hi = 0;
+    clip_ctr = 1;
+    
     % ENTER STIMULUS PRE
     if stimulus_pre_dot
         stps = GetSecs();
@@ -1175,9 +1261,9 @@ for i = 1:n_trs_tot
                     Screen('DrawTexture', win_ctrl, bg_imgs_texture_ctrl(bgidx), [], bg_stim_rect_curr*shrink_factor)
                 end
             end
-
+            
             drawInfoText();
-            checkLick(); 
+            checkLick();
             
             if seqidx ~= 0
                 if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
@@ -1186,7 +1272,7 @@ for i = 1:n_trs_tot
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [xcurr, ycurr]*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
                 Screen('DrawDots', win, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1);
             end
-           
+            
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             drawBoundingBoxes(curr_bb_stim_pre_dot);
             
@@ -1209,36 +1295,36 @@ for i = 1:n_trs_tot
                 trial_aborted(i) = true;
                 break
             elseif find(kCode) == bonus_rew_key
-                if isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait 
+                if isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait
                     bonus_reward_t(end+1) = GetSecs() - t_start_sec;
                     %man_reward_ct = man_reward_ct + 1;
                     bonus_reward_ct = bonus_reward_ct + 1;
                     pumpReward_updateGUI();
                     fprintf('bonus reward, time = %0.3fs\n', bonus_reward_t(end));
-                end    
-            elseif any(find(kCode) == wake_up_movie_key) && isfield(s,'wake_up_movie') 
-                wake_up_movie = 1; 
+                end
+            elseif any(find(kCode) == wake_up_movie_key) && isfield(s,'wake_up_movie')
+                wake_up_movie = 1;
                 wu_mov_start_t(end+1) = GetSecs()-t_start_sec;
                 while wake_up_movie
-                    disp('wake_up_movie is playing') 
+                    disp('wake_up_movie is playing')
                     drawInfoText();
-                    checkLick(); 
+                    checkLick();
                     Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
                     [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
                     [keyIsDown, ~, keyCode] = KbCheck(-1);
                     if (keyIsDown==1 && keyCode(wake_up_movie_terminate_key))
-                        Screen('PlayMovie',moviePtr_wu,0); 
-                        wu_mov_end_t(end+1) = GetSecs()-t_start_sec; 
+                        Screen('PlayMovie',moviePtr_wu,0);
+                        wu_mov_end_t(end+1) = GetSecs()-t_start_sec;
                         break;
                     end
-
+                    
                     waitforimage = 1;
                     movtex_new_wu = Screen('GetMovieImage', win, moviePtr_wu, waitforimage);
                     %Screen('PlayMovie', movie, rate, 1, 1.0);
                     if movtex_new_wu>0
                         movtex_wu = movtex_new_wu;
                     end
-
+                    
                     if ctrl_screen
                         Screen('DrawTexture', win_ctrl, movtex_wu, [],  wu_movie_stim_rect*shrink_factor);
                         Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
@@ -1248,7 +1334,7 @@ for i = 1:n_trs_tot
                     vbl = Screen('flip',win,vbl+halfifi,dontclear,dontsync,multiflip);
                     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl,vbl2+halfifi, dontclear2,dontsync2,multiflip2);end
                 end
-                wake_up_movie = 0; 
+                wake_up_movie = 0;
             end
             
             if require_fix_tr_init && seqidx ~= 0
@@ -1261,10 +1347,10 @@ for i = 1:n_trs_tot
                 if curr_in_bb  && qual_check
                     fix_pre_fr_ctr = fix_pre_fr_ctr + 1;
                     blink_ctr = 0;
-                   
+                    
                     if fix_pre_fr_ctr == 3
-                        calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; 
-                        clip_ctr = clip_ctr + 1;             
+                        calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec;
+                        clip_ctr = clip_ctr + 1;
                     end
                 elseif (~curr_in_bb || ~qual_check) && fix_pre_fr_ctr>3 && blink_ctr<n_frames_blink
                     blink_ctr = blink_ctr + 1;
@@ -1306,7 +1392,7 @@ for i = 1:n_trs_tot
         end_stim = 0;
     end
     blink_ctr = 0;
-    rsvp_ctr = 1;
+    %rsvp_ctr = 1;
     rsvp_break_ctr = 0;
     inter_rsvp_fr_ctr = 1;
     pulse_t_idx = 0; % for size-pulsed imaged
@@ -1314,21 +1400,30 @@ for i = 1:n_trs_tot
     
     % ENTER STIMULUS
     while ~end_stim && ~exit_flag % loops for every frame
-        t1_frame = GetSecs(); 
-        if fix_exp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames && seqidx ~= 0
+        t1_frame = GetSecs();
+        if fix_exp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr <= inter_rsvp_frames && seqidx ~= 0
             % go into a break
             inter_rsvp = true;
-            interrsvpfridx = interrsvpfridx + 1; 
+            interrsvpfridx = interrsvpfridx + 1;
         else
             inter_rsvp = false;
             rsvpfridx = rsvpfridx + 1;
-            interrsvpfridx = 0; 
+            interrsvpfridx = 0;
             %rsvpfridx
         end
         
-        if strcmp(stim_mode, 'images') && seqidx ~=0 
+        if (strcmp(stim_mode, 'images') || m2s_mode)&& seqidx ~=0
             img_idx = img_seq(rsvp_ctr, i);
         end
+        
+        if m2s_mode
+            if rsvp_ctr == 1 
+                curr_bb = sample_bb; 
+            else
+                curr_bb = test_bb; 
+            end
+        end
+        
         stfridx = stfridx + 1; % stim frame idx, counts every frame from stim start (rsvp_1) through trial stim end (rsvp_n)
         idx_all = idx_all +1; % idx for all frames recorded
         
@@ -1346,6 +1441,12 @@ for i = 1:n_trs_tot
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
             
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
+            %if m2s_mode && rsvp_ctr>1 && curr_in_bb
+                %disp('curr in bb')
+                %fprintf('curr in bb: %d\n', loop_brk_ctr); 
+                %loop_brk_ctr
+            %end
+            
             eye_in_bb_curr(stfridx) = curr_in_bb;
             
             if draw_retain_bb_pts
@@ -1401,8 +1502,8 @@ for i = 1:n_trs_tot
                         Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
                             Screen('DrawTexture', win_ctrl, imgs_texture_ctrl(img_idx), [], stim_rect_curr*shrink_factor)
-                            Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
-                                dotsz, rgba_cols(:,end), [], 1);
+                            %Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
+                            %    dotsz, rgba_cols(:,end), [], 1);
                         end
                     case 'moving_dot'
                         t_mov_start = GetSecs();
@@ -1452,8 +1553,8 @@ for i = 1:n_trs_tot
                         end
                         if ctrl_screen
                             Screen('DrawTexture', win_ctrl, movtex, [],  stim_rect*shrink_factor);
-                            Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
-                                dotsz, rgba_cols(:,end), [], 1);
+                            %Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
+                            %    dotsz, rgba_cols(:,end), [], 1);
                         end
                         Screen('DrawTexture', win, movtex, [],  stim_rect)
                         % for movies, re-draw dots
@@ -1465,41 +1566,87 @@ for i = 1:n_trs_tot
                     case 'rectangle'
                         Screen('FillRect', win, rect_col, stim_rect);
                         %Screen('DrawDots', win, all_pts(seqidx,:), 5, blackcol, [], 1);
-                        if ctrl_screen 
+                        if ctrl_screen
                             Screen('FillRect', win_ctrl, rect_col, stim_rect*shrink_factor);
                             Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                                 dotsz, rgba_cols(:,end), [], 1);
                         end
+                    case 'match_to_sample'
+
+                        if rsvp_ctr == 1 % draw a sample
+                            %fprintf('sample frame: %d\n', rsvpfridx); 
+                            rsx_curr = stim_rect_size_x;
+                            rsy_curr = round(rsx_curr/sample_ar(img_idx));
+                            stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
+                            if isempty(image_displayed{rsvp_ctr,i})
+                                image_displayed{rsvp_ctr, i} = sample_img_fnames{img_idx};
+                            end
+                            Screen('DrawTexture', win, sample_imgs_texture(img_idx), [], stim_rect_curr)
+                            if ctrl_screen
+                                Screen('DrawTexture', win_ctrl, sample_imgs_texture_ctrl(img_idx), [], stim_rect_curr*shrink_factor)
+                            end
+
+                        else % draw a test
+                            rsx_curr = test_img_len;
+                            %rsy_curr = round(rsx_curr/test_ar(img_idx));
+                            rsy_curr = test_img_ht; 
+                            stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
+                            
+                            if isempty(image_displayed{rsvp_ctr,i})
+                                image_displayed{rsvp_ctr, i} = test_img_fnames{img_idx};
+                            end
+                            Screen('DrawTexture', win, test_imgs_texture(img_idx), [], stim_rect_curr)
+                            if ctrl_screen
+                                Screen('DrawTexture', win_ctrl, test_imgs_texture_ctrl(img_idx), [], stim_rect_curr*shrink_factor)
+                            end
+                        end
                 end
                 
+                
+                if ctrl_screen % draw eye position dots
+                    Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
+                        dotsz, rgba_cols(:,end), [], 1);
+                end
+                
+                
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
-                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                    if ~m2s_mode || (m2s_mode && rsvp_ctr == 1)
+                        if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                        Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                    elseif m2s_mode && rsvp_ctr > 1
+                        if dots_on_test_grid
+                            %sca; 
+                            %keyboard 
+                            if ctrl_screen; Screen('DrawDots', win_ctrl, test_pts'*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                            Screen('DrawDots', win, test_pts', stim_pre_dot_sz, whitecol, [], 1);
+                        end
+                    end
                 end
                 
             elseif seqidx == 0 % draw wakeup trial
-                wu_img_idx = wu_seq(wu_idx); 
+                wu_img_idx = wu_seq(wu_idx);
                 if isempty(wake_up_image_displayed{i})
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
                 end
                 
-                % randomly draw from a list of 
+                % randomly draw from a list of
                 Screen('DrawTexture', win, wu_imgs_texture(wu_img_idx), [], stim_rect);
                 
-                if ctrl_screen 
+                if ctrl_screen
                     Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl(wu_img_idx), [], stim_rect*shrink_factor);
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                         dotsz, rgba_cols(:,end), [], 1);
                 end
                 
             elseif inter_rsvp
-                if constant_bg_mode                   
+               %fprintf('inter_rsvp: %d\n', inter_rsvp_fr_ctr); 
+                if constant_bg_mode
                     Screen('DrawTexture', win, bg_imgs_texture(bgidx), [], bg_stim_rect_curr)
                     if ctrl_screen
                         Screen('DrawTexture', win_ctrl, bg_imgs_texture_ctrl(bgidx), [], bg_stim_rect_curr*shrink_factor)
                     end
                 end
-
+                
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                     if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
                     Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
@@ -1511,7 +1658,7 @@ for i = 1:n_trs_tot
                 
             end
             
-            checkLick(); 
+            checkLick();
             
             if strcmp(reward_on, 'location')
                 if location_require_quality
@@ -1520,7 +1667,7 @@ for i = 1:n_trs_tot
                     qual_check = true;
                 end
                 
-                if fix_exp_mode
+                if (fix_exp_mode && ~m2s_mode)|| (m2s_mode && rsvp_ctr == 1)
                     if curr_in_bb && qual_check
                         rsvp_break_ctr = 0;
                         % sample command trigger starts
@@ -1552,7 +1699,7 @@ for i = 1:n_trs_tot
                 end
             end
             
-            if photodiode_flash % per elias' request, show photodiode square during inter_rsvp 
+            if photodiode_flash % per elias' request, show photodiode square during inter_rsvp
                 whichflash = mod(stfridx, 2);
                 
                 if whichflash
@@ -1579,7 +1726,7 @@ for i = 1:n_trs_tot
             drawInfoText();
             drawBoundingBoxes();
             
-            %t2_frame = GetSecs(); 
+            %t2_frame = GetSecs();
             %%%%% STIMULUS FRAME FLIP
             vbl = Screen('Flip', win, vbl + halfifi,dontclear, dontsync, multiflip);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
@@ -1595,7 +1742,7 @@ for i = 1:n_trs_tot
                 stim_trig_hi = 0;
             end
             
-             % sample command trigger starts
+            % sample command trigger starts
             if trig_flag && ~isempty(sampleCommand_trig_cmd) && ~sampleCommand_trig_hi && stfridx == 1
                 IOPort('Write', trig_hand, sampleCommand_trig_cmd.on, 1);
                 sampleCommand_trig_hi = 1;
@@ -1603,21 +1750,23 @@ for i = 1:n_trs_tot
             
             if stfridx == 1
                 calib_st_t(i) = GetSecs()-t_start_sec;
+                fprintf('wrote start time: %0.3f\n', calib_st_t(i)); 
             end
             
             %clip time
             frame_t = vbl-t_start_sec;
-            frame_st_t = [frame_st_t,frame_t]; 
-            frame_clip_num = [frame_clip_num,rsvp_ctr]; 
+            frame_st_t = [frame_st_t,frame_t];
+            frame_clip_num = [frame_clip_num,rsvp_ctr];
             
             if rsvpfridx == 1 || interrsvpfridx == 1
                 calib_t_clip(i,clip_ctr) = frame_t;
                 clip_ctr = clip_ctr+1;
             end
-
+            
         end
         
-        if fix_exp_mode && rsvpfridx >= stim_frames
+        %if fix_exp_mode && rsvpfridx >= stim_frames
+        if ((fix_exp_mode && ~m2s_mode) || (m2s_mode && rsvp_ctr == 1)) && rsvpfridx >= stim_frames
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
             rsvpfridx_old = rsvpfridx;
@@ -1636,7 +1785,7 @@ for i = 1:n_trs_tot
                 end_stim = 1;
             end
         elseif strcmp(trial_mode, 'foraging')
-            if fix_exp_mode
+            if (fix_exp_mode && ~m2s_mode)|| (m2s_mode && rsvp_ctr == 1)
                 if rsvp_ctr > n_rsvp
                     end_stim = 1;
                     calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; % inter_rsvp
@@ -1645,9 +1794,11 @@ for i = 1:n_trs_tot
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
                 end
             else
+                %if m2s_mode && rsvp_ctr > 1 stfridx >= round(time_out_after/1e3/ifi)
+                
                 if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
                     end_stim = 1;
-                    calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec; 
+                    calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec;
                 elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && ~entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
@@ -1683,6 +1834,7 @@ for i = 1:n_trs_tot
         
         if end_stim
             Screen('FillRect', win, bg_col_val);
+            
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
             if seqidx ~= 0 && give_rewards && color_shift_feedback && loop_brk_ctr > 0
@@ -1699,7 +1851,8 @@ for i = 1:n_trs_tot
             
             % if ending, note the time:
             calib_end_t(i) = GetSecs()-t_start_sec;
-           
+            fprintf('trial dur: %0.3f\n', calib_end_t(i)-calib_st_t(i)); 
+            
             if trig_flag
                 %disp('stim trig off');
                 IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
@@ -1709,6 +1862,8 @@ for i = 1:n_trs_tot
             end
             
             if give_rewards && ~skip_reward
+                %sca
+                %keyboard
                 if strcmp(trial_mode, 'trial') || seqidx == 0
                     if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
                         frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
@@ -1723,7 +1878,8 @@ for i = 1:n_trs_tot
                     end
                     
                 elseif strcmp(trial_mode, 'foraging')
-                    if fix_exp_mode
+                    %sca; keyboard
+                    if (fix_exp_mode && ~m2s_mode) || (m2s_mode && rsvp_ctr == 1)
                         if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                             reward_this_trial = false;
                         else
@@ -1744,18 +1900,18 @@ for i = 1:n_trs_tot
                 end
                 
                 if reward_this_trial
-                    correct_trial(i) = true; 
+                    correct_trial(i) = true;
                     if lick_flag
                         %%% check trials since last lick
                         if isnan(rew_trs_since_lick) && ~lick_trial(i)
-                            %rew_trs_since_lick  = i; 
-                            rew_trs_since_lick = sum(correct_trial); 
+                            %rew_trs_since_lick  = i;
+                            rew_trs_since_lick = sum(correct_trial);
                         elseif lick_trial(i)
                             rew_trs_since_lick = 0;
                         elseif i == 1 && ~lick_trial(i)
-                            rew_trs_since_lick = 1; 
+                            rew_trs_since_lick = 1;
                         else
-                            rew_trs_since_lick = rew_trs_since_lick + 1; 
+                            rew_trs_since_lick = rew_trs_since_lick + 1;
                         end
                     end
                     
@@ -1774,16 +1930,16 @@ for i = 1:n_trs_tot
                     end
                     
                     if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
-                       IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
-                       sampleCommand_trig_hi = 0;
+                        IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
+                        sampleCommand_trig_hi = 0;
                     end
                     
                     if ~isempty(reward_pumphand)
-                        if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
+                        if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag
                             reward_time(i) = GetSecs()-t_start_sec;
                             reward_trial(i) = true;
                             if reward_serial
-                                pumpReward_updateGUI(); 
+                                pumpReward_updateGUI();
                                 %writeline(reward_pumphand, 'RUN');
                                 
                                 %WaitSecs(reward_on_dur);
@@ -1794,12 +1950,12 @@ for i = 1:n_trs_tot
                             end
                             %t1_rew = GetSecs();
                             %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
-                            %drawnow;                                
-                            t2_rew = GetSecs(); 
-                            %sca; keyboard 
-                            %pumpReward_updateGUI(); 
+                            %drawnow;
+                            t2_rew = GetSecs();
+                            %sca; keyboard
+                            %pumpReward_updateGUI();
                         elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
-                            fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick); 
+                            fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick);
                         end
                         
                     end
@@ -1812,8 +1968,8 @@ for i = 1:n_trs_tot
                         if draw_retain_bb_pts
                             drawGoodEyePts(0);
                         end
-                        checkLick(); 
-
+                        checkLick();
+                        
                         vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
                         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
                     end
@@ -1831,14 +1987,14 @@ for i = 1:n_trs_tot
                     %sound(aud_pun_y, aud_pun_fs);
                     t1 = PsychPortAudio('Start', audio_handle(2), 1, 0,1);
                     %disp('sound played');
-                   % PsychPortAudio('Stop', audio_handle(2));
+                    % PsychPortAudio('Stop', audio_handle(2));
                 end
                 for p = 1:round(punish_length_ms/1e3/ifi)
                     Screen('FillRect', win, blackcol);
                     if ctrl_screen; Screen('FillRect', win_ctrl, blackcol); end
                     drawInfoText(1);
                     drawBoundingBoxes();
-                    checkLick(); 
+                    checkLick();
                     if draw_retain_bb_pts
                         drawGoodEyePts(0);
                     end
@@ -1847,18 +2003,14 @@ for i = 1:n_trs_tot
                 end
                 
                 if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
-                   IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
-                   sampleCommand_trig_hi = 0;
+                    IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
+                    sampleCommand_trig_hi = 0;
                 end
-            end       
+            end
         end
     end
     
     if seqidx == 0
-%         wu_img_idx = wu_img_idx +1;
-%         if wu_img_idx > n_wu_imgs
-%             wu_img_idx = 1;
-%         end
         wu_idx = wu_idx + 1;
         if wu_idx > n_wu_imgs
             wu_idx = 1;
@@ -1877,7 +2029,7 @@ for i = 1:n_trs_tot
     end
     
     calib_frame_st_t{i} = frame_st_t;
-    calib_frame_clip_num{i} = frame_clip_num; 
+    calib_frame_clip_num{i} = frame_clip_num;
 end
 
 Screen('FillRect', win, bg_col_val);
@@ -1889,7 +2041,7 @@ end
 
 t2 = GetSecs;
 Screen('CloseAll');
-PsychPortAudio('Close'); 
+PsychPortAudio('Close');
 sca
 
 if trig_flag
@@ -1901,7 +2053,7 @@ if trig_flag
     IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
     IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
     if ~isempty(sampleCommand_trig_cmd)
-        IOPort('Write', trig_hand, sampleCommand_trig_cmd.off,1); 
+        IOPort('Write', trig_hand, sampleCommand_trig_cmd.off,1);
     end
 end
 
@@ -1927,9 +2079,9 @@ calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
 calib.time_to_bounding_box = time_to_bb;
 calib.sequence = tr_seq;
-calib.clip_sequence_start_t = calib_t_clip; 
-calib.frame_st_t = calib_frame_st_t; 
-calib.frame_clip_num = calib_frame_clip_num; 
+calib.clip_sequence_start_t = calib_t_clip;
+calib.frame_st_t = calib_frame_st_t;
+calib.frame_clip_num = calib_frame_clip_num;
 calib.trial_mode = trial_mode;
 calib.reward_on = reward_on;
 calib.time_to_reward = time_to_reward;
@@ -1943,8 +2095,15 @@ calib.n_wake_up_trs = n_wake_up_trs;
 calib.image_displayed = image_displayed;
 calib.wake_up_image_displayed = wake_up_image_displayed;
 calib.wake_up_movie_start_t = wu_mov_start_t;
-calib.wake_up_movie_end_t = wu_mov_end_t; 
-calib.training_notes_objectives = training_notes_str; 
+calib.wake_up_movie_end_t = wu_mov_end_t;
+calib.training_notes_objectives = training_notes_str;
+
+
+
+
+
+
+
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
@@ -1958,7 +2117,7 @@ calib_settings.stim_rect_size_x = stim_rect_size_x;
 calib_settings.stim_rect_size_y = stim_rect_size_y;
 calib_settings.stim_mode = stim_mode;
 calib_settings.img_folder = img_folder;
-calib_settings.img_folder_idx = img_folder_idx; 
+calib_settings.img_folder_idx = img_folder_idx;
 calib_settings.pulsed_img_size = pulse_size;
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') ||strcmp(stim_mode,'smooth pursuit')
     calib_settings.img_list = img_fnames;
@@ -1994,12 +2153,12 @@ calib_settings.wake_up_img_dir = wake_up_img_fold;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_x;
 calib_settings.wake_up_stim_size_x = wake_up_stim_size_y;
 calib_settings.wake_up_tr_dur = wake_up_tr_dur;
-calib_settings.photodiode_on = photodiode_flash; 
-calib_settings.photodiode_sz = flash_rect_size; 
-calib_settings.photodiode_pos = [flash_rect(1),flash_rect(2)]; 
+calib_settings.photodiode_on = photodiode_flash;
+calib_settings.photodiode_sz = flash_rect_size;
+calib_settings.photodiode_pos = [flash_rect(1),flash_rect(2)];
 
 if isfield(s,'wake_up_movie')
-    calib_settings.wake_up_movie = s.wake_up_movie;  
+    calib_settings.wake_up_movie = s.wake_up_movie;
 end
 
 % offset in y
@@ -2011,7 +2170,21 @@ calib_settings.require_fix_tr_init = require_fix_tr_init;
 calib_settings.fixation_to_init = fixation_to_init;
 calib_settings.time_out_trial_init_s = time_out_trial_init_s;
 calib_settings.clip_sequence = clip_sequence;
-calib_settings.clip_sequence_t = clip_sequence_t; 
+calib_settings.clip_sequence_t = clip_sequence_t;
+
+
+if m2s_mode
+    calib_settings.test_bb_size_x = test_bb_size_x;
+    calib_settings.test_bb_size_y = test_bb_size_y;
+    calib_settings.test_img_len = test_img_len;
+    calib_settings.test_img_ht = test_img_ht;
+    calib_settings.dots_on_test_grid = dots_on_test_grid;
+    calib_settings.task_folder = task_folder;
+    calib_settings.task_params = tf; 
+    calib_settings.taskfile = taskfile; 
+    calib_settings.test_bounding_rects = test_bounding_rects; 
+end
+
 
 eyetrack.time = eyetracker_time;
 eyetrack.x = eyepos_x;
@@ -2038,24 +2211,24 @@ settings.computer_type = computer;
 [~, hname] = system('hostname');
 settings.hostname = strtrim(hname);
 [~, WindowsVersion] = system('ver');
-settings.osversion = strtrim(WindowsVersion); 
+settings.osversion = strtrim(WindowsVersion);
 settings.time_save = datestr(now, 'yyyy-dd-mm_HH-MM-SS');
 settings.time_start = session_time;
 settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
 settings.screenScale = setup_config.screenScale;
-settings.screenPixels = setup_config.screenPixels; 
-settings.screenPhysicalPixels = setup_config.screenPhysicalPixels; 
+settings.screenPixels = setup_config.screenPixels;
+settings.screenPhysicalPixels = setup_config.screenPhysicalPixels;
 settings.screenInches = setup_config.screenInches;
-settings.viewportPPI = setup_config.viewportPPI; 
-settings.deviceBrand = setup_config.deviceBrand; 
+settings.viewportPPI = setup_config.viewportPPI;
+settings.deviceBrand = setup_config.deviceBrand;
 settings.devicePixelRatio = setup_config.devicePixelRatio;
 
 reward.give_rewards = true;
-reward.reward_type = reward_type; 
+reward.reward_type = reward_type;
 reward.n_rewards_given = sum(reward_trial);
 reward.reward_sequence = reward_trial;
-reward.correct_trial = correct_trial; 
+reward.correct_trial = correct_trial;
 reward.reward_vol = reward_vol;
 reward.arduino_pin_reward = reward_arduino_pin;
 reward.reward_thresh_frac_good_glint = reward_thresh;
@@ -2066,12 +2239,12 @@ reward.play_sound = play_reward_sound;
 reward.sound_file = reward_sound_file;
 reward.manual_reward_t = manual_reward_t;
 reward.man_reward_ct = man_reward_ct;
-reward.bonus_reward_ct = bonus_reward_ct; 
-reward.bonus_reward_t = bonus_reward_t; 
-reward.lickometer = lick_flag; 
-reward.lick_times_all = lick_times_all(~isnan(lick_times_all)); 
-reward.lick_arduino_pin = lick_arduino_pin; 
-reward.lick_trial = lick_trial; 
+reward.bonus_reward_ct = bonus_reward_ct;
+reward.bonus_reward_t = bonus_reward_t;
+reward.lickometer = lick_flag;
+reward.lick_times_all = lick_times_all(~isnan(lick_times_all));
+reward.lick_arduino_pin = lick_arduino_pin;
+reward.lick_trial = lick_trial;
 
 punish.give_punishments = give_punishments;
 punish.n_puns_given = sum(punish_trial);
@@ -2082,7 +2255,7 @@ punish.sound_file = punish_sound_file;
 
 %% SAVE: save data
 savefname = sprintf('calib_%s_%s.mat', subject, session_time);
-settings.data_file_name = savefname; 
+settings.data_file_name = savefname;
 save_full = fullfile(save_data_dir, savefname); % output variable
 save(fullfile(save_data_dir, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
 fprintf('session data saved to %s\n', fullfile(save_data_dir, savefname));
@@ -2091,7 +2264,7 @@ fprintf('session data saved to %s\n', fullfile(save_data_dir, savefname));
 try
     save(fullfile(save_data_dir_remote, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
     fprintf('remote save: session data saved to %s\n', fullfile(save_data_dir_remote, savefname));
-    % convert to mkTurk style data and save 
+    % convert to mkTurk style data and save
     if mkTurk_data_save
         convert_to_mkTurkData(save_data_dir_remote,fullfile(save_data_dir, savefname));
     end
@@ -2235,7 +2408,7 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
             end
             
             DrawFormattedText(win_ctrl, calib_superstr, 80, win_rect_ctrl(4)-180, textcol);
-
+            
             punish_superstr = sprintf('give time-out punish: %d, dur: %dms, nr punish: %d\ntr start requires fixation: %d, pre-stim time in box: %dms\ntime pre-stim total: %dms\n', give_punishments, punish_length_ms_draw,...
                 sum(punish_trial), require_fix_tr_init,  round(fix_pre_fr_ctr*ifi*1e3), round(pre_stim_timer*1e3));
             DrawFormattedText(win_ctrl, punish_superstr, 700, win_rect_ctrl(4) - 150, textcol);
@@ -2245,7 +2418,7 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
     function drawBoundingBoxes(curr_bb_stim_pre_dot)
         if ctrl_screen
-            if show_curr_bounding_box 
+            if show_curr_bounding_box
                 if nargin>0 && seqidx ~= 0
                     Screen('FrameRect',win_ctrl,cols(seqidx+1,:), curr_bb_stim_pre_dot*shrink_factor,5);
                 elseif nargin>0 && seqidx == 0
@@ -2256,9 +2429,15 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
                     Screen('FrameRect', win_ctrl, whitecol, curr_bb*shrink_factor, 5);
                 end
             end
-            if show_all_bounding_boxes && seqidx ~= 0 
-                Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects'*shrink_factor, 1);
-                Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot'*shrink_factor,1);
+            if show_all_bounding_boxes && seqidx ~= 0
+                if  m2s_mode
+                    if rsvp_ctr>1 
+                        Screen('FrameRect', win_ctrl, cols(2:end,:)', test_bounding_rects'*shrink_factor, 1);
+                    end
+                else
+                    Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects'*shrink_factor, 1);
+                    Screen('FrameRect',win_ctrl,cols(2:end,:)',bounding_rects_stim_pre_dot'*shrink_factor,1);
+                end
             end
         end
     end
@@ -2294,15 +2473,15 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
             end
             
             if lick
-                lick_idx = lick_idx + 1; 
+                lick_idx = lick_idx + 1;
                 lick_times_all(lick_idx) = GetSecs()- t_start_sec;
                 if ~lick_trial(curr_tr)
-                    fprintf('lick tr %d\n', curr_tr); 
+                    fprintf('lick tr %d\n', curr_tr);
                 end
-                lick_trial(curr_tr) = true;    
+                lick_trial(curr_tr) = true;
                 
                 if correct_trial(curr_tr)
-                    rew_trs_since_lick = 0; 
+                    rew_trs_since_lick = 0;
                 end
                 
             end
@@ -2317,7 +2496,7 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 end
 
-%% SUPPORT FUNCTIONs: subfunction
+%% SUPPORT FUNCTIONs: subfunctions
 function draw_coords = ret_dots_in_rect(x,y,disp_rect,eye_rect)
 
 disp_ht = disp_rect(4)-disp_rect(2);
@@ -2335,3 +2514,51 @@ draw_coords(1,:) = round((x*eyewin_len) + eyewin_xoffset);
 draw_coords(2,:) = round(((y)*eyewin_ht) + eyewin_yoffset);
 end
 
+function [imgs, im_ht, im_wd, ar] = load_images(img_fnames)
+% takes a list of images, reads them, returns image matrices, heights,
+% widths, aspect ratios
+% used in image mode and match_to_sample mode
+fprintf('Reading %d stim images\n', numel(img_fnames));
+imgs = cell(1,numel(img_fnames));
+t_pre_imread = GetSecs();
+for i = 1:numel(img_fnames)
+    [img_tmp, ~,alpha] = imread(img_fnames{i});
+    fprintf('.')
+    if ~isempty(alpha)
+        img_tmp(:,:,4) = alpha;
+    end
+    imgs{i} = img_tmp;
+    im_ht(i) = size(imgs{i}, 1);
+    im_wd(i) = size(imgs{i}, 2);
+    ar(i) = im_wd(i)/im_ht(i);
+    if mod(i, 100) == 0
+        fprintf('\n');
+    end
+end
+t_post_imread = GetSecs();
+fprintf('\nThat took %0.2f s\n', t_post_imread - t_pre_imread);
+end
+
+function [img_fnames, img_folder_idx] = ret_image_fnames(img_folder)
+
+EXT = {'.tiff','.png','.jpg','.jpeg'}; % Acceptable extensions
+if iscell(img_folder)
+    img_fnames = [];
+    img_folder_idx = [];
+    for i = 1:numel(img_folder)
+        img_fnames_tmp = dir(img_folder{i});
+        [~,~,e] = fileparts({img_fnames_tmp.name});
+        img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
+        img_fnames_tmp = fullfile(img_folder{i}, {img_fnames_tmp.name});
+        img_fnames = [img_fnames img_fnames_tmp];
+        img_folder_idx = [img_folder_idx, i* ones(1,length(img_fnames_tmp))];
+    end
+else
+    img_fnames_tmp = dir(img_folder);
+    [~,~,e] = fileparts({img_fnames_tmp.name});
+    img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
+    img_fnames = fullfile(img_folder, {img_fnames_tmp.name});
+    img_folder_idx = ones(1,length(img_fnames));
+end
+
+end

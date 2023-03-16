@@ -462,6 +462,7 @@ else
     handles.response_time = handles.params.time_out_after;
     handles.trial_time = handles.params.presentation_time;
     handles.punish_time = handles.params.punish_length_ms; 
+    handles.stim_mode = handles.params.stim_mode; 
     
     if isfield(handles.params, 'require_fix_tr_init')
         handles.require_fix_tr_init = handles.params.require_fix_tr_init;
@@ -520,8 +521,13 @@ else
     end
     
     %keyboard
-    
-    if strcmp(handles.trial_mode, 'foraging')
+    if strcmp(handles.stim_mode, 'match_to_sample')
+        set(handles.trial_time_edit,'Enable', 'on');
+        set(handles.hold_time_edit, 'Enable', 'on');
+        set(handles.response_time_edit, 'Enable', 'on');
+        set(handles.n_rsvp_edit, 'Enable', 'on'); 
+        set(handles.break_after_edit, 'Enable', 'on');
+    elseif strcmp(handles.trial_mode, 'foraging')
         set(handles.trial_time_edit,'Enable', 'off');
         set(handles.hold_time_edit, 'Enable', 'on');
         set(handles.response_time_edit, 'Enable', 'on');
