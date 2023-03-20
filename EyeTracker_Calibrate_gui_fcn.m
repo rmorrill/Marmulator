@@ -227,6 +227,17 @@ else
     m2s_mode = false; 
 end
 
+
+if isfield(s, 'draw_crosshairs') % draw white crosshairs on fixation point instead of standard dot 
+    draw_crosshairs = s.draw_crosshairs; 
+    crosshair_sz = s.crosshair_sz; 
+    crosshair_lw = s.crosshair_lw; 
+else
+    draw_crosshairs = false; 
+    crosshair_sz = []; 
+    crosshair_lw = []; 
+end
+    
 %% fixation mode/rsvp setup
 % fix mode will use presentation time for each stimulus duration
 if isfield(s, 'rsvp_iti_t')
@@ -1081,6 +1092,12 @@ end
 stimulus_pre_frames = round(stimulus_pre_time/1e3/ifi); % strimulus_pre_time in ms
 wait_after_rew_frames = round(wait_after_reward/ifi); % wait_after_reward in s
 
+if m2s_mode 
+    foraging_max_t = time_out_after + presentation_time + rsvp_iti_t; 
+else
+    foraging_max_t = time_out_after; 
+end
+
 if strcmp(stim_mode,'spinning')
     tr_seq = nan(n_calib_pts,n_trs_tot);
     
@@ -1130,7 +1147,10 @@ calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t));
 calib_frame_st_t = cell(1,n_trs_tot);
 calib_frame_clip_num = cell(1,n_trs_tot);
 wake_up_image_displayed = cell(1, n_trs_tot);
-
+if n_rsvp>1
+    rsvp_start_t = nan(n_rsvp, n_trs_tot);
+    rsvp_end_t = nan(n_rsvp, n_trs_tot);
+end
 reward_ct = 0;
 man_reward_ct = 0;
 bonus_reward_ct = 0;
@@ -1266,11 +1286,19 @@ for i = 1:n_trs_tot
             checkLick();
             
             if seqidx ~= 0
-                if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                if draw_crosshairs
+                    drawCrosshairs(all_pts(seqidx,:));
+                else
+                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                end
             else
-                if ctrl_screen; Screen('DrawDots', win_ctrl, [xcurr, ycurr]*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                Screen('DrawDots', win, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1);
+                if draw_crosshairs
+                    drawCrosshairs([xcurr, ycurr]); 
+                else
+                    if ctrl_screen; Screen('DrawDots', win_ctrl, [xcurr, ycurr]*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                    Screen('DrawDots', win, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1);
+                end
             end
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
@@ -1611,14 +1639,22 @@ for i = 1:n_trs_tot
                 
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
                     if ~m2s_mode || (m2s_mode && rsvp_ctr == 1)
-                        if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                        Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                        if draw_crosshairs 
+                            drawCrosshairs(all_pts(seqidx,:));  
+                        else
+                            if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                            Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                        end
                     elseif m2s_mode && rsvp_ctr > 1
                         if dots_on_test_grid
-                            %sca; 
-                            %keyboard 
-                            if ctrl_screen; Screen('DrawDots', win_ctrl, test_pts'*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                            Screen('DrawDots', win, test_pts', stim_pre_dot_sz, whitecol, [], 1);
+                            if draw_crosshairs
+                                for tpi = 1:size(test_pts,1)
+                                    drawCrosshairs(test_pts(tpi,:));
+                                end
+                            else
+                                if ctrl_screen; Screen('DrawDots', win_ctrl, test_pts'*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                                Screen('DrawDots', win, test_pts', stim_pre_dot_sz, whitecol, [], 1);
+                            end
                         end
                     end
                 end
@@ -1647,9 +1683,13 @@ for i = 1:n_trs_tot
                     end
                 end
                 
-                if stimulus_pre_dot && ~stimulus_pre_dot_disappear
-                    if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                    Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                if stimulus_pre_dot && ~stimulus_pre_dot_disappear && ~m2s_mode
+                    if draw_crosshairs
+                        drawCrosshairs(all_pts(seqidx,:));
+                    else
+                        if ctrl_screen; Screen('DrawDots', win_ctrl, all_pts(seqidx,:)*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                        Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
+                    end
                 end
                 
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
@@ -1732,6 +1772,14 @@ for i = 1:n_trs_tot
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             %t_dur(stfridx) = t1_frame - t2_frame;
             
+            if stfridx == 1
+                calib_st_t(i) = vbl-t_start_sec;
+            end
+            
+            if n_rsvp>1 && rsvpfridx == 1 
+                rsvp_start_t(rsvp_ctr, i) = vbl-t_start_sec; 
+            end
+            
             if trig_flag && ~stim_trig_hi && ~inter_rsvp
                 %disp('stim trig on');
                 IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
@@ -1747,12 +1795,7 @@ for i = 1:n_trs_tot
                 IOPort('Write', trig_hand, sampleCommand_trig_cmd.on, 1);
                 sampleCommand_trig_hi = 1;
             end
-            
-            if stfridx == 1
-                calib_st_t(i) = GetSecs()-t_start_sec;
-                fprintf('wrote start time: %0.3f\n', calib_st_t(i)); 
-            end
-            
+
             %clip time
             frame_t = vbl-t_start_sec;
             frame_st_t = [frame_st_t,frame_t];
@@ -1767,6 +1810,7 @@ for i = 1:n_trs_tot
         
         %if fix_exp_mode && rsvpfridx >= stim_frames
         if ((fix_exp_mode && ~m2s_mode) || (m2s_mode && rsvp_ctr == 1)) && rsvpfridx >= stim_frames
+            rsvp_end_t(rsvp_ctr, i) = vbl-t_start_sec; 
             rsvp_ctr = rsvp_ctr + 1;
             inter_rsvp_fr_ctr = 1;
             rsvpfridx_old = rsvpfridx;
@@ -1795,14 +1839,13 @@ for i = 1:n_trs_tot
                 end
             else
                 %if m2s_mode && rsvp_ctr > 1 stfridx >= round(time_out_after/1e3/ifi)
-                
                 if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
                     end_stim = 1;
                     calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec;
-                elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && ~entered_bb
+                elseif ~(curr_in_bb && qual_check) && stfridx >= round(foraging_max_t/1e3/ifi) && ~entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
-                elseif ~(curr_in_bb && qual_check) && stfridx >= round(time_out_after/1e3/ifi) && entered_bb
+                elseif ~(curr_in_bb && qual_check) && stfridx >= round(foraging_max_t/1e3/ifi) && entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: FIXATION BROKEN, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
                 end
@@ -1850,7 +1893,11 @@ for i = 1:n_trs_tot
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             
             % if ending, note the time:
-            calib_end_t(i) = GetSecs()-t_start_sec;
+            %calib_end_t(i) = GetSecs()-t_start_sec;
+            calib_end_t(i) = vbl - t_start_sec;         
+            if n_rsvp>1
+                rsvp_end_t(rsvp_ctr, i) = vbl-t_start_sec;
+            end
             fprintf('trial dur: %0.3f\n', calib_end_t(i)-calib_st_t(i)); 
             
             if trig_flag
@@ -2077,6 +2124,10 @@ calib.pts = all_pts;
 % calib_end_t(isnan(calib_end_t)) = [];
 calib.start_t = calib_st_t;
 calib.end_t = calib_end_t;
+if n_rsvp>1
+    calib.rsvp_start_t = rsvp_start_t; 
+    calib.rsvp_end_t = rsvp_end_t; 
+end
 calib.time_to_bounding_box = time_to_bb;
 calib.sequence = tr_seq;
 calib.clip_sequence_start_t = calib_t_clip;
@@ -2097,13 +2148,6 @@ calib.wake_up_image_displayed = wake_up_image_displayed;
 calib.wake_up_movie_start_t = wu_mov_start_t;
 calib.wake_up_movie_end_t = wu_mov_end_t;
 calib.training_notes_objectives = training_notes_str;
-
-
-
-
-
-
-
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
@@ -2143,7 +2187,15 @@ calib_settings.gaze_pt_dot_col = gaze_pt_dot_col;
 calib_settings.gaze_pt_dot_sz = gaze_pt_sz;
 calib_settings.stimulus_pre_dot = stimulus_pre_dot;
 calib_settings.stimulus_pre_time = stimulus_pre_time;
-calib_settings.stim_pre_dot_sz = stim_pre_dot_sz;
+if draw_crosshairs 
+    calib_settings.stim_pre_dot_sz = [];
+else
+    calib_settings.stim_pre_dot_sz = stim_pre_dot_sz;
+end
+calib_settings.draw_crosshairs = draw_crosshairs; 
+calib_settings.crosshair_sz = crosshair_sz; 
+calib_settings.crosshair_lw = crosshair_lw; 
+
 calib_settings.stimulus_pre_dot_disappear = stimulus_pre_dot_disappear;
 
 calib_settings.expt_params = expt_params;
@@ -2184,7 +2236,6 @@ if m2s_mode
     calib_settings.taskfile = taskfile; 
     calib_settings.test_bounding_rects = test_bounding_rects; 
 end
-
 
 eyetrack.time = eyetracker_time;
 eyetrack.x = eyepos_x;
@@ -2493,6 +2544,20 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
         set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
         drawnow;
     end
+
+    function drawCrosshairs(pt)
+        fromH = pt(1)-crosshair_sz;
+        toH = pt(1)+crosshair_sz;
+        fromV = pt(2)-crosshair_sz;
+        toV = pt(2)+crosshair_sz;
+        Screen('DrawLine', win, whitecol, pt(1), fromV, pt(1), toV, crosshair_lw);
+        Screen('DrawLine', win, whitecol, fromH, pt(2), toH, pt(2), crosshair_lw);
+        if ctrl_screen
+            Screen('DrawLine', win_ctrl, whitecol, pt(1)*shrink_factor, fromV*shrink_factor, pt(1)*shrink_factor, toV*shrink_factor, crosshair_lw);
+            Screen('DrawLine', win_ctrl, whitecol, fromH*shrink_factor, pt(2)*shrink_factor, toH*shrink_factor, pt(2)*shrink_factor, crosshair_lw);
+        end
+    end
+            
 
 end
 
