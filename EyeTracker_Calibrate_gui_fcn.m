@@ -223,6 +223,12 @@ if strcmp(stim_mode, 'match_to_sample')
     else
         task_params_file = ''; 
     end
+    
+    if isfield(s, 'punish_incorrect_fix') 
+        punish_incorrect_fix = s.punish_incorrect_fix; 
+    else
+        punish_incorrect_fix = true;
+    end
 else
     m2s_mode = false; 
 end
@@ -271,6 +277,7 @@ if give_punishments
 else
     punish_length_ms_draw = NaN;
 end
+fprintf('punish_length_ms is %d ms\n', punish_length_ms); 
 
 gaze_center_adj_x = setup_config.default_gaze_center_adjust(1);
 gaze_center_adj_y = setup_config.default_gaze_center_adjust(2);
@@ -440,15 +447,22 @@ if m2s_mode
         m2s_img_seq(1,i) = tf.target_ID(i);
         m2s_img_seq(2,i) = i;
     end
-    
-    % convert the test grid (in fractional coordinates) to pix relative to im center 
-    test_pts = tf.test_grid .* [test_img_len, test_img_ht]; 
-    test_img_x_cent = round(test_img_len/2); 
-    test_img_y_cent = round(test_img_ht/2);     
-    test_pts(:,1) = test_pts(:,1) - test_img_x_cent; 
-    test_pts(:,2) = test_pts(:,2) - test_img_y_cent;
-
-    %sca; keyboard
+    % convert the test grid (in fractional coordinates) to pix relative to im center
+    test_img_x_cent = round(test_img_len/2);
+    test_img_y_cent = round(test_img_ht/2);
+    if iscell(tf.test_grid) % grid is specified in a per-test image basis
+        test_pts = cell(numel(tf.test_grid),1);
+        for tp = 1:numel(tf.test_grid)
+            test_pts_tmp = tf.test_grid{tp} .* [test_img_len, test_img_ht];
+            test_pts_tmp(:,1) = test_pts_tmp(:,1) - test_img_x_cent;
+            test_pts_tmp(:,2) = test_pts_tmp(:,2) - test_img_y_cent;
+            test_pts{tp} = test_pts_tmp;
+        end
+    else
+        test_pts = tf.test_grid .* [test_img_len, test_img_ht];
+        test_pts(:,1) = test_pts(:,1) - test_img_x_cent;
+        test_pts(:,2) = test_pts(:,2) - test_img_y_cent;
+    end
    % if apply_gaze_center_adj
     %    test_pts(:,2) = test_pts(:,2) + gaze_center_adj_y;
    %     test_pts(:,1) = test_pts(:,1) + gaze_center_adj_x;
@@ -593,10 +607,15 @@ end
 
 if m2s_mode
     % put test pts into screen space
-    test_pts(:,1) = test_pts(:,1) + x_cent; 
-    test_pts(:,2) = test_pts(:,2) + y_cent; 
-    %sca; 
-    %keyboard
+    if iscell(test_pts)
+        for tp = 1:numel(test_pts)
+            test_pts{tp}(:,1) =  test_pts{tp}(:,1) + x_cent;
+            test_pts{tp}(:,2) =  test_pts{tp}(:,2) + y_cent;
+        end
+    else
+        test_pts(:,1) = test_pts(:,1) + x_cent;
+        test_pts(:,2) = test_pts(:,2) + y_cent;
+    end
 end
 
 
@@ -756,9 +775,6 @@ if isfield(s,'add_center')
         end
     end
 end
-
-%sca
-%keyboard 
 
 %% SETUP: spinning: DEPRECATED???
 if strcmp(stim_mode,'spinning')
@@ -1059,9 +1075,19 @@ else
 end
 
 if m2s_mode
-    % define test bounding boxes 
+    % define test bounding boxes
     test_bounding_rect_tmp = [0,0,test_bb_size_x, test_bb_size_y];
-    test_bounding_rects = CenterRectOnPoint(test_bounding_rect_tmp, test_pts(:,1), test_pts(:,2)); 
+    if iscell(test_pts) % test points are defined per-test image
+        test_bounding_rects = cell(numel(test_pts), 1);
+        test_rects_idx = cell(numel(test_pts), 1);
+        for tp = 1:numel(test_pts)
+            test_bounding_rects{tp} = CenterRectOnPoint(test_bounding_rect_tmp, test_pts{tp}(:,1), test_pts{tp}(:,2));
+            test_rects_idx{tp} = 1:size(test_pts{tp},1);
+        end
+    else
+        test_bounding_rects = CenterRectOnPoint(test_bounding_rect_tmp, test_pts(:,1), test_pts(:,2));
+        test_rects_idx = 1:size(test_bounding_rects, 1);
+    end
 end
 
 
@@ -1082,7 +1108,8 @@ aud_pun_y = repmat(aud_pun_y',2/ninchannels,1);
 audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(2), aud_pun_y);
 
-%%
+%% SETUP: ITI, timing 
+
 if iti_random
     iti_frames = round((rand(1,n_trs_tot)*diff(inter_stim_interval)+inter_stim_interval(1))/1e3/ifi);
 else
@@ -1147,6 +1174,7 @@ calib_t_clip = nan * ones(n_trs_tot,length(clip_sequence_t));
 calib_frame_st_t = cell(1,n_trs_tot);
 calib_frame_clip_num = cell(1,n_trs_tot);
 wake_up_image_displayed = cell(1, n_trs_tot);
+incorrect_choice_m2s = zeros(1, n_trs_tot); 
 if n_rsvp>1
     rsvp_start_t = nan(n_rsvp, n_trs_tot);
     rsvp_end_t = nan(n_rsvp, n_trs_tot);
@@ -1167,7 +1195,7 @@ if profile_memory
     avail_phys_mem = nan(1,n_trs_tot);
 end
 
-%% RUN: start the stimulus loop
+%% RUN: start the stimulus loop %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 Screen('FillRect', win, bg_col_val)
 seqidx = 0;
@@ -1184,6 +1212,7 @@ for i = 1:n_trs_tot
     rsvp_ctr = 1; 
     interrsvpfridx = 0;
     loop_brk_ctr = 0;
+    punish_loop_brk_ctr = 0; 
     pre_stim_timer = 0;
     manual_reward_flag = false; % has a manual reward been given on the trial yet?
     entered_bb = false; % did eye go into bb?
@@ -1197,9 +1226,21 @@ for i = 1:n_trs_tot
         ycurr = all_pts(seqidx,2);
         stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         if m2s_mode % we need sample and test bounding boxes
-            sample_bb = bounding_rects(seqidx,:); 
-            test_bb = test_bounding_rects(target_idx(curr_tr),:);
-            curr_bb = sample_bb; 
+            sample_bb = bounding_rects(seqidx,:);
+            if iscell(test_bounding_rects)
+                test_bounding_rects_curr = test_bounding_rects{img_seq(end,curr_tr)};
+                test_rects_idx_curr = test_rects_idx{img_seq(end,curr_tr)}; 
+            else
+                test_bounding_rects_curr = test_bounding_rects;
+                test_rects_idx_curr = test_rects_idx; 
+            end
+
+            test_bb = test_bounding_rects_curr(target_idx(curr_tr),:);
+            punish_rects = test_rects_idx_curr(test_rects_idx_curr ~= target_idx(curr_tr));
+            punish_bbs = test_bounding_rects_curr(punish_rects,:);
+            n_punish_bbs = size(punish_bbs, 1);
+            
+            curr_bb = sample_bb;
         else
             curr_bb = bounding_rects(seqidx,:);
         end
@@ -1467,8 +1508,24 @@ for i = 1:n_trs_tot
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
-            
+
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb);
+
+            %t_pb1 = GetSecs(); 
+            if m2s_mode && rsvp_ctr>1 && ~inter_rsvp
+                in_punish_bb_tmp = false(1,n_punish_bbs); 
+                for p = 1:n_punish_bbs
+                    in_punish_bb_tmp(p) = IsInRect(eyeposx_cur,eyeposy_cur,punish_bbs(p,:)); 
+                end
+                if any(in_punish_bb_tmp) 
+                    curr_in_bb_punish = true; 
+                    in_punish_bb = find(in_punish_bb_tmp); 
+                else
+                    curr_in_bb_punish = false; 
+                end
+                %t_pb2 = GetSecs();            
+            end
+            
             %if m2s_mode && rsvp_ctr>1 && curr_in_bb
                 %disp('curr in bb')
                 %fprintf('curr in bb: %d\n', loop_brk_ctr); 
@@ -1646,14 +1703,21 @@ for i = 1:n_trs_tot
                             Screen('DrawDots', win, all_pts(seqidx,:), stim_pre_dot_sz, whitecol, [], 1);
                         end
                     elseif m2s_mode && rsvp_ctr > 1
+                        
+                        if iscell(test_pts)
+                            test_pts_curr = test_pts{img_seq(end,curr_tr)}; 
+                        else
+                            test_pts_curr = test_pts; 
+                        end
+                        
                         if dots_on_test_grid
                             if draw_crosshairs
-                                for tpi = 1:size(test_pts,1)
-                                    drawCrosshairs(test_pts(tpi,:));
+                                for tpi = 1:size(test_pts_curr,1)
+                                    drawCrosshairs(test_pts_curr(tpi,:));
                                 end
                             else
-                                if ctrl_screen; Screen('DrawDots', win_ctrl, test_pts'*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
-                                Screen('DrawDots', win, test_pts', stim_pre_dot_sz, whitecol, [], 1);
+                                if ctrl_screen; Screen('DrawDots', win_ctrl, test_pts_curr'*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
+                                Screen('DrawDots', win, test_pts_curr', stim_pre_dot_sz, whitecol, [], 1);
                             end
                         end
                     end
@@ -1716,18 +1780,23 @@ for i = 1:n_trs_tot
                         %rsvp_break_ctr
                     end
                 else
-                    if curr_in_bb && qual_check
+                    if curr_in_bb && qual_check  && ~inter_rsvp
                         entered_bb = true;
                         loop_brk_ctr = loop_brk_ctr + 1;
                         blink_ctr = 0;
                         if isnan(time_to_bb(i))
                             time_to_bb(i) = GetSecs() - t_start_sec;
                         end
+                        
                     elseif (~curr_in_bb || ~qual_check) && loop_brk_ctr>3 && blink_ctr<n_frames_blink
                         blink_ctr = blink_ctr + 1;
+                        
+                    elseif m2s_mode && ~inter_rsvp && punish_incorrect_fix && curr_in_bb_punish 
+                        punish_loop_brk_ctr = punish_loop_brk_ctr + 1; 
                     else
                         blink_ctr = 0;
                         loop_brk_ctr = 0;
+                        punish_loop_brk_ctr = 0; 
                     end
                 end
                 
@@ -1842,6 +1911,10 @@ for i = 1:n_trs_tot
                 if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
                     end_stim = 1;
                     calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec;
+                elseif m2s_mode && punish_incorrect_fix && (punish_loop_brk_ctr >= round(time_to_reward/1e3/ifi))
+                    end_stim = 1; 
+                    incorrect_choice_m2s(i) = in_punish_bb; 
+                    fprintf('TRIAL BREAK: FIXATION IN INCORRECT BOX: %d\n', in_punish_bb); 
                 elseif ~(curr_in_bb && qual_check) && stfridx >= round(foraging_max_t/1e3/ifi) && ~entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
@@ -1909,8 +1982,6 @@ for i = 1:n_trs_tot
             end
             
             if give_rewards && ~skip_reward
-                %sca
-                %keyboard
                 if strcmp(trial_mode, 'trial') || seqidx == 0
                     if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
                         frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
@@ -1925,7 +1996,6 @@ for i = 1:n_trs_tot
                     end
                     
                 elseif strcmp(trial_mode, 'foraging')
-                    %sca; keyboard
                     if (fix_exp_mode && ~m2s_mode) || (m2s_mode && rsvp_ctr == 1)
                         if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
                             reward_this_trial = false;
@@ -1999,15 +2069,12 @@ for i = 1:n_trs_tot
                             %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
                             %drawnow;
                             t2_rew = GetSecs();
-                            %sca; keyboard
                             %pumpReward_updateGUI();
                         elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
                             fprintf('No reward given: %d trials since lick\n', rew_trs_since_lick);
                         end
                         
                     end
-                    
-                    %sca; keyboard
                     
                     for w = 1:wait_after_rew_frames
                         drawInfoText();
@@ -2036,7 +2103,8 @@ for i = 1:n_trs_tot
                     %disp('sound played');
                     % PsychPortAudio('Stop', audio_handle(2));
                 end
-                for p = 1:round(punish_length_ms/1e3/ifi)
+                n_pun_frames = round(punish_length_ms/1e3/ifi); 
+                for p = 1:n_pun_frames
                     Screen('FillRect', win, blackcol);
                     if ctrl_screen; Screen('FillRect', win_ctrl, blackcol); end
                     drawInfoText(1);
@@ -2047,6 +2115,7 @@ for i = 1:n_trs_tot
                     end
                     vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
                     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
+                    %fprintf('pun frame %d of %d\n', p, n_pun_frames); 
                 end
                 
                 if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
@@ -2148,6 +2217,7 @@ calib.wake_up_image_displayed = wake_up_image_displayed;
 calib.wake_up_movie_start_t = wu_mov_start_t;
 calib.wake_up_movie_end_t = wu_mov_end_t;
 calib.training_notes_objectives = training_notes_str;
+calib.incorrect_choice_m2s = incorrect_choice_m2s; 
 
 calib_settings.disp_rect = win_rect;
 calib_settings.presentation_time = presentation_time;
@@ -2482,8 +2552,8 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
             end
             if show_all_bounding_boxes && seqidx ~= 0
                 if  m2s_mode
-                    if rsvp_ctr>1 
-                        Screen('FrameRect', win_ctrl, cols(2:end,:)', test_bounding_rects'*shrink_factor, 1);
+                    if rsvp_ctr>1
+                        Screen('FrameRect', win_ctrl, cols(2:end,:)', test_bounding_rects_curr'*shrink_factor, 1);
                     end
                 else
                     Screen('FrameRect', win_ctrl, cols(2:end,:)', bounding_rects'*shrink_factor, 1);
