@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 04-Jan-2023 14:04:51
+% Last Modified by GUIDE v2.5 03-Apr-2023 13:06:20
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -58,6 +58,7 @@ handles.output = hObject;
 % first check for setup params
 m = mfilename('fullpath'); 
 mdir = fileparts(m); 
+%keyboard
 setup_params_file = fullfile(mdir, 'setup_config.mat'); 
 if ~exist(setup_params_file, 'file')
     % complain 
@@ -332,6 +333,15 @@ if ~isempty(ra)
     end
 end
  
+% get and load image sequence, if it exists 
+img_seq_str = get(handles.custom_seq_path_edit, 'String'); 
+if ~isempty(img_seq_str) && isfile(img_seq_str)
+    img_seq_load = load(img_seq_str); 
+    img_seq = img_seq_load.img_seq; 
+else
+    img_seq = []; 
+end
+
 punish_time_ms = str2double(get(handles.punish_time_edit, 'String')); 
 training_notes_str = get(handles.notes_edit, 'String'); 
 
@@ -342,7 +352,7 @@ set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.s
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, punish_time_ms , break_after, n_rsvp, ...
     handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
-    handles.setup_config, training_notes_str);
+    handles.setup_config, training_notes_str, img_seq);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -1458,3 +1468,43 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
 end
 
 
+function custom_seq_path_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to custom_seq_path_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of custom_seq_path_edit as text
+%        str2double(get(hObject,'String')) returns contents of custom_seq_path_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function custom_seq_path_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to custom_seq_path_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in load_custom_seq_push.
+function load_custom_seq_push_Callback(hObject, eventdata, handles)
+% hObject    handle to load_custom_seq_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+sequence_dir = fullfile(handles.base_dir, 'image_sequences'); 
+if ~isfolder(sequence_dir)
+    sequence_dir = handles.base_dir; 
+end
+[fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load sequence file',sequence_dir);
+
+if ~isempty(fname_tmp) && all(fname_tmp ~= 0)
+   im_seq_file = fullfile(pname_tmp, fname_tmp); 
+    set(handles.custom_seq_path_edit, 'String', im_seq_file); 
+else
+    set(handles.custom_seq_path_edit, 'String', ''); 
+end

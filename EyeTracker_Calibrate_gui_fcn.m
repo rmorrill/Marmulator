@@ -4,7 +4,7 @@ function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pump
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str)
+    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str, img_seq)
 
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -915,20 +915,24 @@ if strcmp(stim_mode, 'images')
     
     n_trs_curr = size(img_seq, 2);
 elseif m2s_mode
-    n_trs_requested = trs_per_location;
-    x = floor(n_trs_requested/n_test_imgs);
-    if x>0
-        img_seq = [];
-        for q = 1:x
-            img_seq = [img_seq randperm(n_test_imgs)];
+    if isempty(img_seq) % if img_seq was not loaded from GUI
+        n_trs_requested = trs_per_location;
+        x = floor(n_trs_requested/n_test_imgs);
+        if x>0
+            img_seq = [];
+            for q = 1:x
+                img_seq = [img_seq randperm(n_test_imgs)];
+            end
+            img_seq = [img_seq randperm(n_test_imgs, mod(n_trs_requested, n_test_imgs))];
+        else
+            img_seq = randperm(n_test_imgs, n_trs_requested);
         end
-        img_seq = [img_seq randperm(n_test_imgs, mod(n_trs_requested, n_test_imgs))];
+        img_seq = m2s_img_seq(:,img_seq);
     else
-        img_seq = randperm(n_test_imgs, n_trs_requested);
+        img_seq = m2s_img_seq(:, img_seq);
+        n_trs_requested = size(img_seq,2); 
     end
-    img_seq = m2s_img_seq(:,img_seq);
     n_trs_curr = n_trs_requested;
-
     target_img_seq = img_seq(2,:); 
     target_idx = tf.target_location(target_img_seq); % which location is the correct one? 
 else
@@ -1913,8 +1917,8 @@ for i = 1:n_trs_tot
                     calib_t_clip(i,clip_ctr) = GetSecs() - t_start_sec;
                 elseif m2s_mode && punish_incorrect_fix && (punish_loop_brk_ctr >= round(time_to_reward/1e3/ifi))
                     end_stim = 1; 
-                    incorrect_choice_m2s(i) = in_punish_bb; 
-                    fprintf('TRIAL BREAK: FIXATION IN INCORRECT BOX: %d\n', in_punish_bb); 
+                    incorrect_choice_m2s(i) = in_punish_bb(1); 
+                    fprintf('TRIAL BREAK: FIXATION IN INCORRECT BOX: %d\n', in_punish_bb(1)); 
                 elseif ~(curr_in_bb && qual_check) && stfridx >= round(foraging_max_t/1e3/ifi) && ~entered_bb
                     end_stim = 1;
                     fprintf('TRIAL BREAK: TIMED OUT, %0.1f s \n', GetSecs() - calib_st_t(i) - t_start_sec);
