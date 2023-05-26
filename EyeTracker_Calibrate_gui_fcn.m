@@ -4,7 +4,8 @@ function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pump
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str, img_seq)
+    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str,...
+    img_seq, taskfilelist)
 
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -422,16 +423,25 @@ if m2s_mode
     
     n_rsvp = 2; % overwrite n_rsvp
     
-    % load the task file
-    if ~isempty(task_params_file)
-        taskfile = dir(fullfile(task_folder, task_params_file));
+    if ~isempty(taskfilelist) % check the input first
+        for i = 1:numel(taskfilelist) 
+            tf_tmp = load(taskfilelist{i}, 'task');
+            taskstructs{i} = tf_tmp.task; 
+        end
+        tf = combine_task_files(taskstructs, taskfilelist); 
+        taskfile = taskfilelist; % for save purposes
     else
-        assert(length(taskfile) == 1, sprintf('Number of possible taskfiles in %s does not equal 1', task_folder));
-        taskfile = dir(fullfile(task_folder, '*task_params*.mat'));
+        % load the task file
+        if ~isempty(task_params_file)
+            taskfile = dir(fullfile(task_folder, task_params_file));
+        else
+            assert(length(taskfile) == 1, sprintf('Number of possible taskfiles in %s does not equal 1', task_folder));
+            taskfile = dir(fullfile(task_folder, '*task_params*.mat'));
+        end
+        
+        tf_tmp = load(fullfile(taskfile.folder, taskfile.name));
+        tf = tf_tmp.task;
     end
-    
-    tf_tmp = load(fullfile(taskfile.folder, taskfile.name));
-    tf = tf_tmp.task;
     
     % load all sample_imgs
     %[sample_img_fnames, ~] = ret_image_fnames(tf.sample_img_folder)

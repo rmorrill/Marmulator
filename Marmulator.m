@@ -342,6 +342,15 @@ else
     img_seq = []; 
 end
 
+% get task files if GUI is open 
+taskgui_h = findobj(0, 'tag', 'TaskStimSelectorGUI'); 
+if ~isempty(taskgui_h) 
+    taskguidata = guidata(taskgui_h); 
+    taskfilelist = taskguidata.filelist_full;
+else
+    taskfilelist = []; 
+end
+
 punish_time_ms = str2double(get(handles.punish_time_edit, 'String')); 
 training_notes_str = get(handles.notes_edit, 'String'); 
 
@@ -352,7 +361,7 @@ set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.s
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, punish_time_ms , break_after, n_rsvp, ...
     handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
-    handles.setup_config, training_notes_str, img_seq);
+    handles.setup_config, training_notes_str, img_seq, taskfilelist);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -448,6 +457,13 @@ function select_popup_Callback(hObject, eventdata, handles)
 
 % Hints: contents = cellstr(get(hObject,'String')) returns select_popup contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from select_popup
+
+% kill task gui if it's running
+taskgui_h = findobj(0, 'tag', 'TaskStimSelectorGUI');
+if ~isempty(taskgui_h)
+    close(taskgui_h);
+end
+
 curridx = get(gcbo, 'Value');
 flist = get(gcbo, 'String');
 if curridx == 1
@@ -537,6 +553,11 @@ else
         set(handles.response_time_edit, 'Enable', 'on');
         set(handles.n_rsvp_edit, 'Enable', 'on'); 
         set(handles.break_after_edit, 'Enable', 'on');
+        
+        % NEW: load the stimulus selector GUI
+        if isfield(handles.params, 'task_params_file')
+            TaskStimSelector('dummy', handles.params.task_folder, handles.params.task_params_file)
+        end
     elseif strcmp(handles.trial_mode, 'foraging')
         set(handles.trial_time_edit,'Enable', 'off');
         set(handles.hold_time_edit, 'Enable', 'on');
@@ -556,6 +577,13 @@ else
         set(handles.n_rsvp_edit, 'Enable', 'on'); 
         set(handles.break_after_edit, 'Enable', 'on'); 
     end
+    
+%     if ~strcmp(handles.stim_mode, 'match_to_sample')
+%         taskgui_h = findobj(0, 'tag', 'TaskStimSelectorGUI'); 
+%         if ~isempty(taskgui_h) 
+%             close(taskgui_h); 
+%         end
+%     end
 end
 
 fprintf('loaded params: %s \n', flist{curridx}); 
@@ -1199,8 +1227,6 @@ catch me
 end
 delete(hObject);
 
-
-
 function punish_time_edit_Callback(hObject, eventdata, handles)
 % hObject    handle to punish_time_edit (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
@@ -1419,7 +1445,6 @@ end
 
 guidata(hObject, handles);
 
-
 % --- Executes on selection change in reward_popup.
 function reward_popup_Callback(hObject, eventdata, handles)
 % hObject    handle to reward_popup (see GCBO)
@@ -1428,9 +1453,6 @@ function reward_popup_Callback(hObject, eventdata, handles)
 
 % Hints: contents = cellstr(get(hObject,'String')) returns reward_popup contents as cell array
 %        contents{get(hObject,'Value')} returns selected item from reward_popup
-
-
-
 
 % --- Executes during object creation, after setting all properties.
 function reward_popup_CreateFcn(hObject, eventdata, handles)
