@@ -17,7 +17,7 @@ oldPriority = Priority(newPriority);
 fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
 
 % mkTurk_data_save_flag
-mkTurk_data_save = 0; 
+mkTurk_data_save = 1; 
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -131,6 +131,21 @@ if isfield(s,'image_order')
     image_order = s.image_order;
 else
     image_order = 'random';
+end
+
+if isfield(s,'randomize_block')
+    randomize_block = s.randomize_block; % if 1, the sequence of blocks will be randomized 
+else 
+    randomize_block = 0;
+end
+
+if isfield(s, 'n_block_rep')
+    n_block_rep = s.n_block_rep; % if >1, the block designed experiment will present this number of times. 
+                                    % if randomize_block = 1, the block
+                                    % sequence will be randomized within
+                                    % each rep
+else
+    n_block_rep = 1;
 end
 
 bg_col = s.bg_col;
@@ -370,7 +385,10 @@ dotsz = gaze_pt_sz;
 % setup for images
 EXT = {'.tiff','.png','.jpg','.jpeg'};
 img_folder_idx = [];
-if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
+img_folder_img_idx = []; 
+img_fnames = []; 
+if (strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')) && ~isfield(s,'img_seq')
+
     if iscell(img_folder)
         img_fnames = [];
         img_folder_idx = [];
@@ -381,6 +399,7 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
             img_fnames_tmp = fullfile(img_folder{i}, {img_fnames_tmp.name});
             img_fnames = [img_fnames img_fnames_tmp];
             img_folder_idx = [img_folder_idx, i* ones(1,length(img_fnames_tmp))]; 
+            img_folder_img_idx = [img_folder_img_idx,  linspace(1,length(img_fnames_tmp),length(img_fnames_tmp))]; 
         end
     else
         img_fnames_tmp = dir(img_folder);
@@ -388,9 +407,17 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
         img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
         img_fnames = fullfile(img_folder, {img_fnames_tmp.name});
         img_folder_idx = ones(1,length(img_fnames)); 
+        img_folder_img_idx = linspace(1,length(img_fnames),length(img_fnames)); 
     end
-    
+elseif isfield(s,'img_seq')
+    img_folder_idx = s.img_folder_idx;
+    img_folder_img_idx = s.img_folder_img_idx;
+    img_fnames = s.img_fnames; 
+end
+
+if numel(img_fnames) > 0
     imgs = cell(1,numel(img_fnames));
+    img_fnames_hash = cell(1,length(img_fnames)); 
     for i = 1:numel(img_fnames)
         %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
         [img_tmp, ~,alpha] = imread(img_fnames{i});
@@ -401,12 +428,16 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
         im_ht(i) = size(imgs{i}, 1);
         im_wd(i) = size(imgs{i}, 2);
         ar(i) = im_wd(i)/im_ht(i);
+        img_fnames_hash{i} = createImageHash(img_fnames{i}); 
+        fprintf('%d, %d', i, img_fnames_hash{i}) 
     end
     n_imgs = numel(imgs);
-end
 
-[unique_img_folder,~,ic] = unique(img_folder_idx);
-n_imgs_per_folder = accumarray(ic,1);
+    [unique_img_folder,~,ic] = unique(img_folder_idx);
+    n_imgs_per_folder = accumarray(ic,1);
+else
+    img_fnames_hash = [];
+end
 
 % read wake up images
 if wake_up_trials
@@ -520,7 +551,7 @@ if trig_flag
         time_str = replace(session_time(12:end),'-',''); 
         for i = 1:length(time_str)
             IOPort('Write',trig_hand,sampleCommand_trig_cmd.on,1);
-            WaitSecs(0.01 * str2double(time_str(i)+1));
+            WaitSecs(0.01 * (str2double(time_str(i))+1));
             IOPort('Write', trig_hand, sampleCommand_trig_cmd.off, 1);
             WaitSecs(0.025); 
         end
@@ -700,12 +731,17 @@ if strcmp(stim_mode,'smooth pursuit')
 end
 
 %% set up trial sequence
+if ~isfield(s,'img_seq')
+    if strcmp(image_order,'block')
+        trs_per_location = trs_per_location * length(unique_img_folder) * n_block_rep; 
+    end
 
-if strcmp(image_order,'block')
-    trs_per_location = trs_per_location * length(unique_img_folder); 
+    n_trs_requested = n_calib_pts*trs_per_location;
+else
+    n_trs_requested = size(s.img_seq,2); 
+    trs_per_location = n_trs_requested; 
+    n_rsvp = size(s.img_seq,1); 
 end
-
-n_trs_requested = n_calib_pts*trs_per_location;
 
 tr_seq = []; 
 if strcmp(position_order, 'random')
@@ -744,65 +780,92 @@ if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
 end
 
-% set up img sequence
-if strcmp(stim_mode, 'images')
-    if strcmp(image_order, 'random')
-        n_rsvps = n_trs_requested*n_rsvp;
-        x = floor(n_rsvps/n_imgs);
-        if x>0
-            img_seq = [];
-            for q = 1:x
-                img_seq = [img_seq randperm(n_imgs)];
-            end
-            img_seq = [img_seq randperm(n_imgs, mod(n_rsvps, n_imgs))];
-        else
-            img_seq = randperm(n_imgs, n_rsvps);
-        end
-        
-    elseif strcmp(image_order,'block')
-        % randomly draw from each image folder, but present folders
-        % sequentially as listed in the img_folder
-        % number of trials specified in the Marmulator GUI will now apply
-        % to each image folder
-        img_seq = [];
-        for i = 1:length(unique_img_folder)
-            n_rsvps = n_trs_requested/length(unique_img_folder)*n_rsvp;
-            x = floor(n_rsvps/n_imgs_per_folder(i)); 
-            if i > 1
-                idx_start = n_imgs_per_folder(i-1);
-            else
-                idx_start = 0;
-            end
+if ~isfield(s,'img_seq')
+    % set up img sequence
+    if strcmp(stim_mode, 'images')
+        if strcmp(image_order, 'random')
+            n_rsvps = n_trs_requested*n_rsvp;
+            x = floor(n_rsvps/n_imgs);
             if x>0
+                img_seq = [];
                 for q = 1:x
-                    img_seq = [img_seq randperm(n_imgs_per_folder(i))+idx_start];
+                    img_seq = [img_seq randperm(n_imgs)];
                 end
-                img_seq = [img_seq randperm(n_imgs_per_folder(i),mod(n_rsvps,n_imgs_per_folder(i)))+idx_start]; 
+                img_seq = [img_seq randperm(n_imgs, mod(n_rsvps, n_imgs))];
             else
-                img_seq = [img_seq randperm(n_imgs_per_folder(i), n_rsvps)+idx_start];
+                img_seq = randperm(n_imgs, n_rsvps);
+            end
+
+        elseif strcmp(image_order,'block')
+            % randomly draw from each image folder, but present folders
+            % sequentially as listed in the img_folder
+            % if randomize_block = 1, randomize block 
+            % if n_block_rep > 1 and randomize_block =1 , randomize within
+            % each rep 
+            % number of trials specified in the Marmulator GUI will now apply
+            % to each image folder
+            img_seq = [];
+            
+            for j = 1: n_block_rep
+                if randomize_block == 1
+                    block_order = randperm(length(unique_img_folder));
+                else
+                    block_order = linspace(1,length(unique_img_folder),length(unique_img_folder)); 
+                end
+
+                for i = 1:length(unique_img_folder)
+                    n_rsvps = n_trs_requested/(n_block_rep*length(unique_img_folder))*n_rsvp;
+                    x = floor(n_rsvps/n_imgs_per_folder(block_order(i))); 
+                    idx_start = sum(n_imgs_per_folder(1:block_order(i)-1)); 
+                 
+                    if x>0
+                        for q = 1:x
+                            img_seq = [img_seq randperm(n_imgs_per_folder(block_order(i)))+idx_start];
+                        end
+                        img_seq = [img_seq randperm(n_imgs_per_folder(block_order(i)),mod(n_rsvps,n_imgs_per_folder(block_order(i))))+idx_start]; 
+                    else
+                        img_seq = [img_seq randperm(n_imgs_per_folder(block_order(i)), n_rsvps)+idx_start];
+                    end
+                end
+                    
+            end
+
+        else % sequential presentation 
+            n_rsvps = n_trs_requested*n_rsvp;
+            x = floor(n_rsvps/n_imgs);
+            img_seq = [repmat(1:n_imgs, 1, x) 1:mod(n_rsvps, x*n_imgs)];
+        end
+
+        img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
+
+        if wake_up_trials % insert wake up trials as n_rsvp x 1 zeros matrices in appropriate position
+            wu_tr_idx = find(tr_seq == 0);
+            for i = 1:numel(wu_tr_idx)
+                wu_tr_idx_curr = wu_tr_idx(i);
+                img_seq = [img_seq(:,1:wu_tr_idx_curr-1) zeros(n_rsvp, 1) img_seq(:,wu_tr_idx_curr:end)];
             end
         end
-        
-    else % sequential presentation 
-        n_rsvps = n_trs_requested*n_rsvp;
-        x = floor(n_rsvps/n_imgs);
-        img_seq = [repmat(1:n_imgs, 1, x) 1:mod(n_rsvps, x*n_imgs)];
+        image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
+    else
+        img_seq = [];
+        image_displayed = [];
     end
-    
-    img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
-    
-    if wake_up_trials % insert wake up trials as n_rsvp x 1 zeros matrices in appropriate position
-        wu_tr_idx = find(tr_seq == 0);
-        for i = 1:numel(wu_tr_idx)
-            wu_tr_idx_curr = wu_tr_idx(i);
-            img_seq = [img_seq(:,1:wu_tr_idx_curr-1) zeros(n_rsvp, 1) img_seq(:,wu_tr_idx_curr:end)];
-        end
-    end
-    image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
-else
-    img_seq = [];
-    image_displayed = [];
+else % trial queue is explicitly provided by the param file
+    img_seq = s.img_seq; 
+    image_displayed = cell(n_rsvp, n_trs_tot);
 end
+
+% vectorize stim_rect_size_x
+
+if length(stim_rect_size_x) == 1 && length(img_seq) > 1 && strcmp(stim_mode, 'images')
+    stim_rect_size_x = repmat(stim_rect_size_x,size(img_seq));
+end
+
+if length(stim_rect_size_y) == 1 && length(img_seq) > 1 && strcmp(stim_mode, 'images')
+    stim_rect_size_y = repmat(stim_rect_size_y,size(img_seq));
+end
+
+
 
 % desired trial clip sequence
 clip_sequence = {'stimulus'}; 
@@ -876,16 +939,16 @@ end
 
 %% Reward and Punish sound handles using PsychPortAudio
 audio_handle = [];
-% reward
+%reward
 [aud_y, aud_fs] = psychwavread(reward_sound_file); 
 [samplecount,ninchannels] = size(aud_y); 
 aud_y = repmat(aud_y',2/ninchannels,1); 
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
-n_dev = 4; 
+n_dev = setup_config.audio_deviceNum; 
 audio_handle(1) = PsychPortAudio('Open', n_dev, [], 1, aud_fs,2, [],suggestedLat);
 PsychPortAudio('FillBuffer', audio_handle(1), aud_y);
 
-% punish
+%punish
 [aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file); 
 [samplecount,ninchannels] = size(aud_pun_y); 
 aud_pun_y = repmat(aud_pun_y',2/ninchannels,1); 
@@ -994,9 +1057,6 @@ for i = 1:n_trs_tot
 %     end
     
     if seqidx ~= 0
-        xcurr = all_pts(seqidx,1);
-        ycurr = all_pts(seqidx,2);
-        stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_bb = bounding_rects(seqidx,:);
         curr_bb_stim_pre_dot = bounding_rects_stim_pre_dot(seqidx,:);
     else
@@ -1179,7 +1239,9 @@ for i = 1:n_trs_tot
     end
     
     if strcmp(stim_mode, 'moving_dot')
-        curr_rect = stim_rect;
+        xcurr = all_pts(seqidx,1);
+        ycurr = all_pts(seqidx,2);
+        curr_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
         curr_x = round(rand * [curr_rect(3) - curr_rect(1)]) + curr_rect(1);
         curr_y = round(rand * [curr_rect(4) - curr_rect(2)]) + curr_rect(2);
         dx_sign = sign(randn);
@@ -1193,6 +1255,8 @@ for i = 1:n_trs_tot
     
     if trial_init_timed_out(i)
         end_stim = 1;
+        IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+        trial_trig_hi = 0; 
     else
         end_stim = 0;
     end
@@ -1288,14 +1352,27 @@ for i = 1:n_trs_tot
                             if pulse_t_idx>length(t_sin)
                                 pulse_t_idx =1;
                             end
-                            %rsx_curr = stim_rect_size_x*pulse_sin(stfridx);
-                            rsx_curr = stim_rect_size_x*pulse_sin(pulse_t_idx);
+                            %rsx_curr = stim_rect_size_x(rsvp_ctr,i)*pulse_sin(stfridx);
+                            rsx_curr = stim_rect_size_x(rsvp_ctr,i)*pulse_sin(pulse_t_idx);
                             rsy_curr = round(rsx_curr/ar(img_idx));
                         else
-                            rsx_curr = stim_rect_size_x;
-                            rsy_curr = round(rsx_curr/ar(img_idx));
+%                             rsx_curr = stim_rect_size_x(rsvp_ctr,i);
+%                             rsy_curr = round(rsx_curr/ar(img_idx));
+                              % set the largest dimension as the
+                              % stim_rect_size
+                              
+                              if ar(img_idx) > 1 
+                                  % width is larger than height 
+                                  rsx_curr = stim_rect_size_x(rsvp_ctr,i); 
+                                  rsy_curr = round(rsx_curr/ar(img_idx));
+                              else 
+                                  % height is larger than width
+                                  rsy_curr = stim_rect_size_y(rsvp_ctr,i); 
+                                  rsx_curr = round(rsy_curr * ar(img_idx));
+                              end
                         end
-                        
+                        xcurr = all_pts(seqidx,1);
+                        ycurr = all_pts(seqidx,2);
                         stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                         Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
                         if ctrl_screen
@@ -1350,7 +1427,10 @@ for i = 1:n_trs_tot
                     case 'movie'
                         t_mov_start = GetSecs();
                         waitforimage = 0;
-                        %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
+                        xcurr = all_pts(seqidx,1);
+                        ycurr = all_pts(seqidx,2);
+                        stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
+                                        %movtex_new = Screen('GetMovieImage', win_ctrl, moviePtr, waitforimage);
                         movtex_new = Screen('GetMovieImage', win, moviePtr, waitforimage);
                         %Screen('PlayMovie', movie, rate, 1, 1.0);
                         if movtex_new>0
@@ -1369,6 +1449,9 @@ for i = 1:n_trs_tot
                         %                         end
                         %mov_dur(end+1) = GetSecs()-t_mov_start;
                     case 'rectangle'
+                        xcurr = all_pts(seqidx,1);
+                        ycurr = all_pts(seqidx,2);
+                        stim_rect = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
                         Screen('FillRect', win, rect_col, stim_rect);
                         %Screen('DrawDots', win, all_pts(seqidx,:), 5, blackcol, [], 1);
                         if ctrl_screen 
@@ -1389,6 +1472,11 @@ for i = 1:n_trs_tot
                 end
                 
             elseif seqidx == 0 % draw wakeup trial
+                 % put stim rect around center
+                xcurr = x_cent;
+                ycurr = y_cent;
+                stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], xcurr, ycurr);
+
                 wu_img_idx = wu_seq(wu_idx); 
                 if isempty(wake_up_image_displayed{i})
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
@@ -1488,6 +1576,16 @@ for i = 1:n_trs_tot
             if stfridx == 1
                 calib_st_t(i) = GetSecs()-t_start_sec;
             end
+            
+            %clip time
+            frame_t = GetSecs()-t_start_sec;
+            frame_st_t = [frame_st_t,(frame_t-calib_st_t(i))*1000]; % msec 
+            frame_clip_num = [frame_clip_num,rsvp_ctr]; 
+            
+            if rsvpfridx == 1 || interrsvpfridx == 1 && ~isnan(clip_ctr) && seqidx ~=0
+                calib_t_clip(i,clip_ctr) = frame_t - calib_st_t(i);
+                clip_ctr = clip_ctr+1;
+            end
             vbl = Screen('Flip', win, vbl + halfifi,dontclear, dontsync, multiflip);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             %t_dur(stfridx) = t1_frame - t2_frame;
@@ -1508,15 +1606,6 @@ for i = 1:n_trs_tot
                 sampleCommand_trig_hi = 1;
             end
            
-            %clip time
-            frame_t = vbl-t_start_sec;
-            frame_st_t = [frame_st_t,(frame_t-calib_st_t(i))*1000]; % msec 
-            frame_clip_num = [frame_clip_num,rsvp_ctr]; 
-            
-            if rsvpfridx == 1 || interrsvpfridx == 1 && ~isnan(clip_ctr) && seqidx ~=0
-                calib_t_clip(i,clip_ctr) = frame_t - calib_st_t(i);
-                clip_ctr = clip_ctr+1;
-            end
 %             if ~isempty(tex1)    %tex1
 %                 Screen('Close', tex1);
 %                 Screen('Close', tex2);
@@ -1617,6 +1706,7 @@ for i = 1:n_trs_tot
                 stim_trig_hi = 0;
                 % turn off trial trigger
                 IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
+                trial_trig_hi = 0; 
             end
             
             if give_rewards && ~skip_reward
@@ -1867,16 +1957,28 @@ calib_settings.iti_random = iti_random;
 calib_settings.iti_frames = iti_frames;
 calib_settings.position_order = position_order;
 calib_settings.bg_col = bg_col_val;
-calib_settings.stim_rect_size_x = stim_rect_size_x;
-calib_settings.stim_rect_size_y = stim_rect_size_y;
+if length(unique(stim_rect_size_x)) == 1 && length(stim_rect_size_x) > 1
+    calib_settings.stim_rect_size_x = stim_rect_size_x(1);
+else
+    calib_settings.stim_rect_size_x = stim_rect_size_x;
+end
+
+if length(unique(stim_rect_size_y)) == 1 && length(stim_rect_size_y) > 1
+    calib_settings.stim_rect_size_y = stim_rect_size_y(1);
+else
+    calib_settings.stim_rect_size_y = stim_rect_size_y;
+end
 calib_settings.stim_mode = stim_mode;
+calib_settings.image_order = image_order; 
 calib_settings.img_folder = img_folder;
-calib_settings.img_folder_idx = img_folder_idx; 
+calib_settings.img_folder_idx = img_folder_idx; % index of the folder. probably most useful for mkTurk type data with scenefiles 
+calib_settings.img_folder_img_idx = img_folder_img_idx; % index of the image within the folder 
 calib_settings.pulsed_img_size = pulse_size;
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') ||strcmp(stim_mode,'smooth pursuit')
     calib_settings.img_list = img_fnames;
+    calib_settings.img_hash = img_fnames_hash; 
 else
-    calib_settings.img_list = [];
+    calib_settings.img_list = []; 
 end
 calib_settings.img_seq = img_seq;
 calib_settings.n_rsvp = n_rsvp;
