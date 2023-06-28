@@ -5,7 +5,7 @@ function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pump
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
     trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str)
-%keyboard
+
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
@@ -254,6 +254,12 @@ else
     end
 end
 
+if isfield(s, 'constant_bg_mode')
+    constant_bg_mode = s.constant_bg_mode; 
+else
+    constant_bg_mode = false; 
+end
+
 if give_punishments
     punish_length_ms_draw = punish_length_ms;
 else
@@ -403,8 +409,8 @@ if (strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_m
         end
     else
         img_fnames_tmp = dir(img_folder);
-        [~,~,e] = fileparts({img_fnames_tmp.name}); 
-        img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
+        [~,~,e] = fileparts({img_fnames_tmp.name});
+        img_fnames_tmp = img_fnames_tmp(matches(e,EXT,'IgnoreCase',1));
         img_fnames = fullfile(img_folder, {img_fnames_tmp.name});
         img_folder_idx = ones(1,length(img_fnames)); 
         img_folder_img_idx = linspace(1,length(img_fnames),length(img_fnames)); 
@@ -421,6 +427,7 @@ if numel(img_fnames) > 0
     for i = 1:numel(img_fnames)
         %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
         [img_tmp, ~,alpha] = imread(img_fnames{i});
+        fprintf('.')
         if ~isempty(alpha)
             img_tmp(:,:,4) = alpha;
         end
@@ -431,12 +438,50 @@ if numel(img_fnames) > 0
         img_fnames_hash{i} = createImageHash(img_fnames{i}); 
         fprintf('%d, %d', i, img_fnames_hash{i}) 
     end
+    t_post_imread = GetSecs(); 
+    fprintf('\nThat took %0.2f s\n', t_post_imread - t_pre_imread); 
     n_imgs = numel(imgs);
 
     [unique_img_folder,~,ic] = unique(img_folder_idx);
     n_imgs_per_folder = accumarray(ic,1);
 else
     img_fnames_hash = [];
+end
+
+if constant_bg_mode % read the backgrounds separately 
+    % go through folders and search for a 'background_*.*' images in each    if iscell(img_folder)
+    if iscell(img_folder)
+        bg_img_fnames = [];
+        for i = 1:numel(img_folder)
+            bg_img_fnames_tmp = dir(fullfile(img_folder{i}, 'background_*'));
+            if numel(bg_img_fnames_tmp)~= 1 
+                error('number of possible backgrounds in folder %s does not equal 1\nlabel background images as "background_*"', img_folder{i}); 
+            end
+            [~,~,e] = fileparts({bg_img_fnames_tmp.name}); 
+            bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
+            bg_img_fnames_tmp = fullfile(img_folder{i}, {bg_img_fnames_tmp.name});
+            bg_img_fnames = [bg_img_fnames bg_img_fnames_tmp];
+        end
+    else
+        bg_img_fnames_tmp = dir(fullfile(img_folder, 'background_*'));
+        [~,~,e] = fileparts({bg_img_fnames_tmp.name}); 
+        bg_img_fnames_tmp = bg_img_fnames_tmp(matches(e,EXT,'IgnoreCase',1)); 
+        bg_img_fnames = fullfile(img_folder, {bg_img_fnames_tmp.name});
+    end
+    
+    bg_imgs = cell(1,numel(bg_img_fnames));
+    for i = 1:numel(bg_img_fnames)
+        %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
+        [bg_img_tmp, ~,alpha] = imread(bg_img_fnames{i});
+        if ~isempty(alpha)
+            bg_img_tmp(:,:,4) = alpha;
+        end
+        bg_imgs{i} = bg_img_tmp;
+        bg_im_ht(i) = size(bg_imgs{i}, 1);
+        bg_im_wd(i) = size(bg_imgs{i}, 2);
+        bg_ar(i) = bg_im_wd(i)/bg_im_ht(i);
+    end
+    n_bg_imgs = numel(bg_imgs);
 end
 
 % read wake up images
@@ -481,8 +526,8 @@ end
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
-Screen('Preference', 'SkipSyncTests', 0)
-Screen('Preference', 'VisualDebugLevel', 0)
+Screen('Preference', 'SkipSyncTests', 0);
+Screen('Preference', 'VisualDebugLevel', 0);
 Screen('Preference', 'TextRenderer', 0);
 
 %screenid_stim = max(Screen('Screens'));
@@ -582,23 +627,45 @@ end
 
 %% preload all textures
  % load all image textures 
-if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
-    imgs_texture = cell(1,length(imgs));
-    imgs_texture_ctrl = cell(1,length(imgs)); 
-    for i = 1:length(imgs)
-        imgs_texture{i} = Screen('MakeTexture', win,imgs{i});
-        Screen('PreloadTextures', win,imgs_texture{i});
-        if ctrl_screen
-            imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,imgs{i});
-            Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i}); 
-        end
-    end
-end
+ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
+     %imgs_texture = cell(1,length(imgs));
+     %imgs_texture_ctrl = cell(1,length(imgs));
+     imgs_texture = zeros(1,length(imgs));
+     imgs_texture_ctrl = zeros(1,length(imgs));
+     for i = 1:length(imgs)
+         %imgs_texture{i} = Screen('MakeTexture', win,imgs{i});
+         imgs_texture(i) = Screen('MakeTexture', win,imgs{i});
+         %Screen('PreloadTextures', win,imgs_texture{i});
+         Screen('PreloadTextures', win,imgs_texture(i));
+         if ctrl_screen
+             %imgs_texture_ctrl{i} = Screen('MakeTexture',win_ctrl,imgs{i});
+             imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,imgs{i});
+             %Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl{i});
+             Screen('PreloadTextures',win_ctrl,imgs_texture_ctrl(i));
+         end
+     end
+     
+     
+     if constant_bg_mode
+         bg_imgs_texture = zeros(1,length(bg_imgs));
+         bg_imgs_texture_ctrl = zeros(1,length(bg_imgs));
+         for i = 1:length(bg_imgs)
+             bg_imgs_texture(i) = Screen('MakeTexture', win,bg_imgs{i});
+             Screen('PreloadTextures', win,bg_imgs_texture(i));
+             if ctrl_screen
+                 bg_imgs_texture_ctrl(i) = Screen('MakeTexture',win_ctrl,bg_imgs{i});
+                 Screen('PreloadTextures',win_ctrl,bg_imgs_texture_ctrl(i));
+             end
+         end
+     end
+ end
 
 % load all wake up images
 if wake_up_trials
-    wu_imgs_texture = cell(1,length(wake_up_imgs));
-    wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
+    %wu_imgs_texture = cell(1,length(wake_up_imgs));
+    %wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
+    wu_imgs_texture = zeros(1,length(wake_up_imgs));
+    wu_imgs_texture_ctrl = zeros(1,length(wake_up_imgs)); 
     for i = 1:length(wake_up_imgs)
         wu_imgs_texture{i} = Screen('MakeTexture',win,wake_up_imgs{i});
         Screen('PreloadTextures', win,wu_imgs_texture{i});
@@ -883,12 +950,12 @@ if fix_exp_mode
         end
     end
 else
-    clip_sequence_t = [clip_sequence_t,presentation_time]; 
-    clip_sequence = [clip_sequence,'trial_end']; 
+    clip_sequence_t = [clip_sequence_t,presentation_time];
+    clip_sequence = [clip_sequence,'trial_end'];
 end
 
 if lick_flag
-    lick_trial = false(1,n_trs_tot); 
+    lick_trial = false(1,n_trs_tot);
 else
     lick_trial = []; 
 end
@@ -1074,8 +1141,7 @@ for i = 1:n_trs_tot
     end
     
     idx_all = idx_all +1;
-    
-    
+
     drawInfoText();
     drawBoundingBoxes();
     if draw_retain_bb_pts
@@ -1130,10 +1196,23 @@ for i = 1:n_trs_tot
         while ~end_stim_pre
             
             j = j+1;
-            %for j = 1:stimulus_pre_frames
             idx_all = idx_all +1;
+            
+            % draw background if in constant background mode
+            if seqidx~= 0 && constant_bg_mode
+                bgidx = bg_seq(i);
+                rsx_curr = stim_rect_size_x;
+                rsy_curr = round(rsx_curr/bg_ar(bgidx));
+                bg_stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
+                
+                Screen('DrawTexture', win, bg_imgs_texture(bgidx), [], bg_stim_rect_curr)
+                if ctrl_screen
+                    Screen('DrawTexture', win_ctrl, bg_imgs_texture_ctrl(bgidx), [], bg_stim_rect_curr*shrink_factor)
+                end
+            end
+
             drawInfoText();
-            drawBoundingBoxes(curr_bb_stim_pre_dot);
+            %drawBoundingBoxes(curr_bb_stim_pre_dot);
             checkLick(); 
             
             if seqidx ~= 0
@@ -1143,6 +1222,10 @@ for i = 1:n_trs_tot
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [xcurr, ycurr]*shrink_factor, stim_pre_dot_sz*shrink_factor, whitecol, [], 1); end
                 Screen('DrawDots', win, [xcurr, ycurr], stim_pre_dot_sz, whitecol, [], 1);
             end
+           
+            [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
+            drawBoundingBoxes(curr_bb_stim_pre_dot);
+            
             vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             
@@ -1151,7 +1234,7 @@ for i = 1:n_trs_tot
                 trial_trig_hi = 1;
             end
             
-            [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
+            %[eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb_stim_pre_dot);
             
             pre_stim_timer = GetSecs() - stps;
@@ -1293,8 +1376,8 @@ for i = 1:n_trs_tot
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
             % draw informational text into control window:
-            drawInfoText();
-            drawBoundingBoxes();
+            %drawInfoText();
+            %drawBoundingBoxes();
             
             if seqidx ~= 0 && strcmp(trial_mode, 'foraging') && color_shift_feedback && loop_brk_ctr>0
                 Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
@@ -1319,7 +1402,8 @@ for i = 1:n_trs_tot
                         xcurr = all_pts(seqidx,1);
                         ycurr = all_pts(seqidx,2);
                         stim_rect_curr = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
-                        Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        %Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
                             Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
                         end
@@ -1328,7 +1412,8 @@ for i = 1:n_trs_tot
                         ycurr = all_pts{seqidx}(stfridx,2);
                         stim_rect_curr = [xcurr-stim_rect_size_x/2 ycurr-stim_rect_size_y/2 xcurr+stim_rect_size_x/2 ycurr+stim_rect_size_y/2];
                         
-                        Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        %Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
                             Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
                         end
@@ -1338,7 +1423,6 @@ for i = 1:n_trs_tot
                         %                 end
                         
                     case 'images'
-                        
                         if isempty(image_displayed{rsvp_ctr,i})
                             image_displayed{rsvp_ctr, i} = img_fnames{img_idx};
                         end
@@ -1374,9 +1458,11 @@ for i = 1:n_trs_tot
                         xcurr = all_pts(seqidx,1);
                         ycurr = all_pts(seqidx,2);
                         stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
-                        Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        %Screen('DrawTexture', win, imgs_texture{img_idx}, [], stim_rect_curr)
+                        Screen('DrawTexture', win, imgs_texture(img_idx), [], stim_rect_curr)
                         if ctrl_screen
-                            Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
+                            %Screen('DrawTexture', win_ctrl, imgs_texture_ctrl{img_idx}, [], stim_rect_curr*shrink_factor)
+                            Screen('DrawTexture', win_ctrl, imgs_texture_ctrl(img_idx), [], stim_rect_curr*shrink_factor)
                             Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                                 dotsz, rgba_cols(:,end), [], 1);
                         end
@@ -1484,14 +1570,23 @@ for i = 1:n_trs_tot
                 
                 % stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                 % randomly draw from a list of 
-                Screen('DrawTexture', win, wu_imgs_texture{wu_img_idx}, [], stim_rect);
+                %Screen('DrawTexture', win, wu_imgs_texture{wu_img_idx}, [], stim_rect);
+                Screen('DrawTexture', win, wu_imgs_texture(wu_img_idx), [], stim_rect);
                 
-                if ctrl_screen; Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl{wu_img_idx}, [], stim_rect*shrink_factor);
+                if ctrl_screen 
+                    %Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl{wu_img_idx}, [], stim_rect*shrink_factor);
+                    Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl(wu_img_idx), [], stim_rect*shrink_factor);
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                         dotsz, rgba_cols(:,end), [], 1);
                 end
                 
             elseif inter_rsvp
+                if constant_bg_mode                   
+                    Screen('DrawTexture', win, bg_imgs_texture(bgidx), [], bg_stim_rect_curr)
+                    if ctrl_screen
+                        Screen('DrawTexture', win_ctrl, bg_imgs_texture_ctrl(bgidx), [], bg_stim_rect_curr*shrink_factor)
+                    end
+                end
                 %sca
                 %keyboard
                 if stimulus_pre_dot && ~stimulus_pre_dot_disappear
@@ -1502,7 +1597,6 @@ for i = 1:n_trs_tot
                 if ctrl_screen; Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                         dotsz, rgba_cols(:,end), [], 1); end
                 inter_rsvp_fr_ctr = inter_rsvp_fr_ctr + 1;
-                %inter_rsvp_fr_ctr
                 
             end
             
@@ -1570,6 +1664,11 @@ for i = 1:n_trs_tot
                     end
                 end
             end
+            
+            
+            % draw informational text into control window:
+            drawInfoText();
+            drawBoundingBoxes();
             
             %t2_frame = GetSecs(); 
             %%%%% STIMULUS FRAME FLIP
