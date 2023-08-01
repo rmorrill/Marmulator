@@ -95,7 +95,7 @@ handles.pump_arduino_connected = 0;
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
 %handles.reward_pin = 10; 
-handles.reward_pin = 4; 
+handles.reward_pin = 2; 
 handles.reward_today = 0; % start reward counter at 0 mL 
 handles.calibration_loaded = false; 
 handles.calib_file = []; 
@@ -162,28 +162,67 @@ function connect_push_Callback(hObject, eventdata, handles)
 % hObject    handle to connect_push (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-handles.arduino_comport = get(handles.com_edit, 'String');
+% handles.arduino_comport = get(handles.com_edit, 'String');
+% if ~handles.pump_arduino_connected
+%     try
+%         handles.reward_arduino = arduino(handles.arduino_comport);
+%         flush(handles.reward_arduino);
+%         %set(gcbo, 'Enable', 'off')
+%         handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
+%         handles.pump_arduino_connected = 1;
+%         set(gcbo, 'String', 'Disconnect')
+%     catch me
+%         disp(me);
+%         disp('Arduino not connected!');
+%         handles.pump_arduino_connected = 0;
+%     end
+% else
+%     fid = instrfind('Port', handles.arduino_comport); 
+%     fclose(fid); 
+%     delete(handles.reward_arduino);
+%     handles.reward_arduino = []; 
+%     handles.pump_arduino_connected = 0;
+%     set(gcbo, 'String', 'Connect Arduino')
+%     disp('Arduino disconnected'); 
+% end
+% 
+% guidata(hObject, handles);
+
+
+port = get(handles.com_edit, 'String');
 if ~handles.pump_arduino_connected
-    try
-        handles.reward_arduino = arduino(handles.arduino_comport);
-        flush(handles.reward_arduino);
-        %set(gcbo, 'Enable', 'off')
-        handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
+    baudrate = 115200;
+    readtimeout = 0.01; % 10ms 
+    %[ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
+    %configstr = ''; 
+    configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate, readtimeout); 
+    [ahand, errmsg] = IOPort('OpenSerialPort', port, configstr);
+    if isempty(errmsg) % good, success
+        fprintf('Pump arduino on port %s is connected\n', port);
+        reward_arduino.ahand = ahand; 
+        IOPort('Flush', ahand); 
+        set(gcbo, 'String', 'Disconnect');
+        set(handles.com_edit, 'enable', 'off');
         handles.pump_arduino_connected = 1;
-        set(gcbo, 'String', 'Disconnect')
-    catch me
-        disp(me);
-        disp('Arduino not connected!');
+        reward_arduino.pump_pin = 2;
+        assign_pump_pins(reward_arduino); 
+        pump_cmd = gen_pump_command(reward_arduino);
+        handles.pump_cmd = pump_cmd; 
+        handles.reward_arduino = reward_arduino;
+        handles.arduino_comport = port;
+    else
+        fprintf('ERROR CONNECTING TO %s\n', port);
+        fprintf('Check:\nis device plugged in?\nis device on %s?\nis device being used by another program?', port);
         handles.pump_arduino_connected = 0;
     end
 else
-    fid = instrfind('Port', handles.arduino_comport); 
-    fclose(fid); 
-    delete(handles.reward_arduino);
-    handles.reward_arduino = []; 
+    IOPort('Flush', handles.reward_arduino.ahand); 
+    IOPort('Close', handles.reward_arduino.ahand);    
+    set(handles.com_edit, 'enable', 'on');
+    set(gcbo, 'String', 'Connect');
     handles.pump_arduino_connected = 0;
-    set(gcbo, 'String', 'Connect Arduino')
-    disp('Arduino disconnected'); 
+    fprintf('Disconnecting from port %s\n', port);
+    handles.arduino_comport = []; 
 end
 
 guidata(hObject, handles);
@@ -198,7 +237,7 @@ function com_edit_Callback(hObject, eventdata, handles)
 
 
 % --- Executes during object creation, after setting all properties.
-function com_edit_CreateFcn(hObject, eventdata, handles)
+function com_edit_CreateFcn(hObject, ~, handles)
 % hObject    handle to com_edit (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    empty - handles not created until after all CreateFcns called
@@ -217,10 +256,13 @@ function reward_push_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 %keyboard
 if handles.pump_arduino_connected
-    handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
+    %handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
     %WaitSecs(0.1);
-    WaitSecs(0.);
-    handles.reward_arduino.digitalWrite(handles.reward_pin, 0);
+    %WaitSecs(0.);
+    %handles.reward_arduino.digitalWrite(handles.reward_pin, 0);
+    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.on, 1);
+    WaitSecs(10);
+    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.off, 1);
     reward_given = 1;
 elseif handles.pump_serial_connected
     writeline(handles.reward_serial, 'RUN');
@@ -1150,9 +1192,11 @@ if ~isempty(h.subject_file)
 end
 
 if h.pump_arduino_connected
-    fid = instrfind('Port', h.arduino_comport);
-    fclose(fid);
-    delete(h.reward_arduino);
+%     fid = instrfind('Port', h.arduino_comport);
+%     fclose(fid);
+%     delete(h.reward_arduino);
+    IOPort('Flush', h.reward_arduino.ahand);
+    IOPort('Close',h.reward_arduino.ahand); 
     disp('Pump arduino disconnected');
 end
 
@@ -1251,8 +1295,6 @@ function break_after_edit_CreateFcn(hObject, eventdata, handles)
 if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
     set(hObject,'BackgroundColor','white');
 end
-
-
 
 function trig_arduino_com_edit_Callback(hObject, eventdata, handles)
 % hObject    handle to trig_arduino_com_edit (see GCBO)

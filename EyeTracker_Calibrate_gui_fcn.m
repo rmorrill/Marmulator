@@ -19,6 +19,9 @@ fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
 % mkTurk_data_save_flag
 mkTurk_data_save = 1; 
 
+% hash image flag
+hash_image = 0; 
+
 if ~isempty(calib_fname)
     c = load(calib_fname);
     
@@ -50,8 +53,11 @@ end
 % check reward "arduino" - serial or arduino
 if ~isempty(reward_pumphand) && contains(class(reward_pumphand), 'Serialport')
     reward_serial = true;
-elseif ~isempty(reward_pumphand) && contains(class(reward_pumphand), 'arduino')
+elseif ~isempty(reward_pumphand) 
     reward_serial = false;
+    reward_hand = reward_pumphand.ahand;
+    write_pump_cmd = gen_pump_command(reward_pumphand);
+    IOPort('Write',reward_hand,write_pump_cmd.off,1); 
 end
 
 if ~isempty(trigger_arduino)
@@ -111,8 +117,6 @@ dontsync = 0;
 dontsync2 = 0; 
 
 % unpack everything
-save_params_name = s.save_params_name;
-save_params_here = s.save_params_here;
 eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
 window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
@@ -423,7 +427,13 @@ end
 
 if numel(img_fnames) > 0
     imgs = cell(1,numel(img_fnames));
-    img_fnames_hash = cell(1,length(img_fnames)); 
+    if hash_image
+        img_fnames_hash = cell(1,length(img_fnames)); 
+    else
+        img_fnames_hash = []; 
+    end
+    
+    t_pre_imread = GetSecs(); 
     for i = 1:numel(img_fnames)
         %image_fname_list{i} = fullfile(img_folder, img_d(i).name);
         [img_tmp, ~,alpha] = imread(img_fnames{i});
@@ -435,8 +445,10 @@ if numel(img_fnames) > 0
         im_ht(i) = size(imgs{i}, 1);
         im_wd(i) = size(imgs{i}, 2);
         ar(i) = im_wd(i)/im_ht(i);
-        img_fnames_hash{i} = createImageHash(img_fnames{i}); 
-        fprintf('%d, %d', i, img_fnames_hash{i}) 
+        if hash_image
+            img_fnames_hash{i} = createImageHash(img_fnames{i}); 
+            fprintf('%d, %d', i, img_fnames_hash{i}) 
+        end
     end
     t_post_imread = GetSecs(); 
     fprintf('\nThat took %0.2f s\n', t_post_imread - t_pre_imread); 
@@ -526,7 +538,7 @@ end
 %Screen('Preference', 'Verbosity', 0);
 Screen('Preference', 'Verbosity', 1);
 %Screen('Preference', 'SkipSyncTests', skip_sync_tests)
-Screen('Preference', 'SkipSyncTests', 0);
+Screen('Preference', 'SkipSyncTests', 1);
 Screen('Preference', 'VisualDebugLevel', 0);
 Screen('Preference', 'TextRenderer', 0);
 
@@ -571,7 +583,6 @@ Screen('BlendFunction', win, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
 
 HideCursor(screenid_stim); 
 HideCursor(screenid_ctrl); 
-
 
 if ctrl_screen
     Screen('BlendFunction', win_ctrl, 'GL_SRC_ALPHA', 'GL_ONE_MINUS_SRC_ALPHA');
@@ -678,12 +689,14 @@ end
 
 % wake_up movies (keyboard v) 
 if isfield(s,'wake_up_movie')
-    moviefiles_all = dir(s.wake_up_movie);
-    movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
-    moviePtr_wu = Screen('OpenMovie', win, fullfile(s.wake_up_movie, movienames{1}), [], 1, 64);
-    Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
-    
-    wu_movie_stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], x_cent,y_cent);
+    if s.wake_up_trials
+        moviefiles_all = dir(s.wake_up_movie);
+        movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
+        moviePtr_wu = Screen('OpenMovie', win, fullfile(s.wake_up_movie, movienames{1}), [], 1, 64);
+        Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
+
+        wu_movie_stim_rect = CenterRectOnPoint([0, 0, wake_up_stim_size_x, wake_up_stim_size_y], x_cent,y_cent);
+    end
 end
 
 if strcmp(stim_mode, 'movie')
@@ -804,10 +817,15 @@ if ~isfield(s,'img_seq')
     end
 
     n_trs_requested = n_calib_pts*trs_per_location;
+    % vectorize n_rsvp
 else
     n_trs_requested = size(s.img_seq,2); 
     trs_per_location = n_trs_requested; 
-    n_rsvp = size(s.img_seq,1); 
+
+    n_rsvp_vec = zeros(1,n_trs_requested); 
+    for i = 1:n_trs_requested
+        n_rsvp_vec(i) = sum(~isnan(s.img_seq(:,i))); 
+    end
 end
 
 tr_seq = []; 
@@ -919,7 +937,8 @@ if ~isfield(s,'img_seq')
     end
 else % trial queue is explicitly provided by the param file
     img_seq = s.img_seq; 
-    image_displayed = cell(n_rsvp, n_trs_tot);
+    %image_displayed = cell(n_rsvp, n_trs_tot);
+    image_displayed = cell(size(s.img_seq)); 
 end
 
 % vectorize stim_rect_size_x
@@ -935,24 +954,55 @@ end
 
 
 % desired trial clip sequence
-clip_sequence = {'stimulus'}; 
-clip_sequence_t = [0]; 
-
-if fix_exp_mode
-    for i = 1:n_rsvp
-        if i == n_rsvp
-            clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i];
-            clip_sequence = [clip_sequence,'trial_end']; 
+if exist('n_rsvp_vec','var') % different number of n_rsvp per trial
+    clip_sequence = cell(1,n_trs_requested);
+    clip_sequence_t = cell(1,n_trs_requested); 
+    for k = 1:n_trs_requested 
+        n_rsvp_tr = n_rsvp_vec(k);
+        clip_sequence_tr = {'stimulus'}; 
+    	clip_sequence_t_tr = [0]; 
+        if fix_exp_mode
+            for i = 1:n_rsvp_tr
+                if i == n_rsvp_tr
+                    clip_sequence_t_tr = [clip_sequence_t_tr,clip_sequence_t_tr(1) + rsvp_iti_t*(i-1) + presentation_time*i];
+                    clip_sequence_tr = [clip_sequence_tr,'trial_end']; 
+                else
+                      clip_sequence_t_tr = [clip_sequence_t_tr,clip_sequence_t_tr(1) + rsvp_iti_t*(i-1) + presentation_time*i,...
+                    clip_sequence_t_tr(1) + rsvp_iti_t*i + presentation_time*i];
+                    clip_sequence_tr = [clip_sequence_tr,'blank','stimulus']; 
+                end
+            end
         else
-              clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i,...
-            clip_sequence_t(1) + rsvp_iti_t*i + presentation_time*i];
-            clip_sequence = [clip_sequence,'blank','stimulus']; 
+            clip_sequence_t_tr = [clip_sequence_t_tr,presentation_time];
+            clip_sequence_tr = [clip_sequence_tr,'trial_end'];
         end
+        
+        clip_sequence{k} = clip_sequence_tr;
+        clip_sequence_t{k} = clip_sequence_t_tr; 
     end
-else
-    clip_sequence_t = [clip_sequence_t,presentation_time];
-    clip_sequence = [clip_sequence,'trial_end'];
-end
+    
+else 
+    clip_sequence = {'stimulus'}; 
+    clip_sequence_t = [0]; 
+
+    if fix_exp_mode
+        for i = 1:n_rsvp
+            if i == n_rsvp
+                clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i];
+                clip_sequence = [clip_sequence,'trial_end']; 
+            else
+                  clip_sequence_t = [clip_sequence_t,clip_sequence_t(1) + rsvp_iti_t*(i-1) + presentation_time*i,...
+                clip_sequence_t(1) + rsvp_iti_t*i + presentation_time*i];
+                clip_sequence = [clip_sequence,'blank','stimulus']; 
+            end
+        end
+    else
+        clip_sequence_t = [clip_sequence_t,presentation_time];
+        clip_sequence = [clip_sequence,'trial_end'];
+    end
+
+end   
+    
 
 if lick_flag
     lick_trial = false(1,n_trs_tot);
@@ -1152,7 +1202,7 @@ for i = 1:n_trs_tot
     
     Screen('FillRect', win, bg_col_val)
     vbl = Screen('Flip', win);
-    
+
     if ctrl_screen
         Screen('FillRect', win_ctrl, bg_col_val)
         vbl2 = Screen('Flip', win_ctrl);
@@ -1188,7 +1238,12 @@ for i = 1:n_trs_tot
     trial_trig_hi = 0;
     sampleCommand_trig_hi = 0; 
     clip_ctr = 1; 
-
+    
+    if trig_flag && ~trial_trig_hi
+        IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
+        trial_trig_hi = 1;
+    end
+    
     % ENTER STIMULUS PRE
     if stimulus_pre_dot
         stps = GetSecs();
@@ -1225,14 +1280,10 @@ for i = 1:n_trs_tot
            
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             drawBoundingBoxes(curr_bb_stim_pre_dot);
-            
             vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             
-            if trig_flag && ~trial_trig_hi
-                IOPort('Write', trig_hand, trial_trig_cmd.on, 1);
-                trial_trig_hi = 1;
-            end
+            
             
             %[eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             curr_in_bb = IsInRect(eyeposx_cur, eyeposy_cur, curr_bb_stim_pre_dot);
@@ -1336,7 +1387,7 @@ for i = 1:n_trs_tot
     eye_data_qual_curr = nan(1,stim_frames);
     eye_in_bb_curr = nan(1,stim_frames);
     
-    if trial_init_timed_out(i)
+    if trial_init_timed_out(i) && trig_flag
         end_stim = 1;
         IOPort('Write', trig_hand, trial_trig_cmd.off, 1);
         trial_trig_hi = 0; 
@@ -1344,6 +1395,10 @@ for i = 1:n_trs_tot
         end_stim = 0;
     end
     blink_ctr = 0;
+    
+    if exist('n_rsvp_vec','var')
+        n_rsvp = n_rsvp_vec(i);
+    end
     rsvp_ctr = 1;
     rsvp_break_ctr = 0;
     inter_rsvp_fr_ctr = 1;
@@ -1351,6 +1406,7 @@ for i = 1:n_trs_tot
     stim_trig_hi = 0;
     
     % ENTER STIMULUS
+
     while ~end_stim && ~exit_flag % loops for every frame
         t1_frame = GetSecs(); 
         if fix_exp_mode && rsvp_ctr > 1 && inter_rsvp_fr_ctr < inter_rsvp_frames && seqidx ~= 0
@@ -1455,6 +1511,9 @@ for i = 1:n_trs_tot
                                   rsx_curr = round(rsy_curr * ar(img_idx));
                               end
                         end
+                        %stim_rect_size_x(rsvp_ctr,i) = rsx_curr;
+                       %stim_rect_size_y(rsvp_ctr,i) = rsy_curr;
+                        
                         xcurr = all_pts(seqidx,1);
                         ycurr = all_pts(seqidx,2);
                         stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
@@ -1689,14 +1748,28 @@ for i = 1:n_trs_tot
             if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
             %t_dur(stfridx) = t1_frame - t2_frame;
             
-            if trig_flag && ~stim_trig_hi && ~inter_rsvp && seqidx ~=0
-                %disp('stim trig on');
-                IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
-                stim_trig_hi = 1;
-            elseif trig_flag && stim_trig_hi && inter_rsvp && seqidx ~=0
-                %  disp('stim trig off');
-                IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
-                stim_trig_hi = 0;
+            if rsvp_iti_t ~=0
+            
+                if trig_flag && ~stim_trig_hi && ~inter_rsvp && seqidx ~=0
+                    %disp('stim trig on');
+                    IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
+                    stim_trig_hi = 1;
+                elseif trig_flag && stim_trig_hi && inter_rsvp && seqidx ~=0 
+                    %  disp('stim trig off');
+                    IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+                    stim_trig_hi = 0;
+                    
+                end
+            else % no inter rsvp period
+                if trig_flag && ~stim_trig_hi && seqidx ~=0 && rsvpfridx == 1
+                    %disp('stim trig on');
+                    IOPort('Write', trig_hand, stim_trig_cmd.on, 1);
+                    stim_trig_hi = 1;
+                elseif trig_flag && stim_trig_hi && seqidx ~=0 && rsvpfridx == stim_frames - 1
+                    %  disp('stim trig off');
+                    IOPort('Write', trig_hand, stim_trig_cmd.off, 1);
+                    stim_trig_hi = 0;
+                end
             end
             
              % sample command trigger starts
@@ -1877,16 +1950,6 @@ for i = 1:n_trs_tot
                         if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
                             reward_time(i) = GetSecs()-t_start_sec;
                             reward_trial(i) = true;
-                            if reward_serial
-                                pumpReward_updateGUI(); 
-                                %writeline(reward_pumphand, 'RUN');
-                                
-                                %WaitSecs(reward_on_dur);
-                            else
-                                reward_pumphand.digitalWrite(reward_arduino_pin, 1);
-                                WaitSecs(reward_on_dur);
-                                reward_pumphand.digitalWrite(10, 0);
-                            end
                             %t1_rew = GetSecs();
                             %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
                             %drawnow;                                
@@ -2080,7 +2143,11 @@ else
     calib_settings.img_list = []; 
 end
 calib_settings.img_seq = img_seq;
-calib_settings.n_rsvp = n_rsvp;
+if exist('n_rsvp_vec','var')
+    calib_settings.n_rsvp = n_rsvp_vec; 
+else
+    calib_settings.n_rsvp = n_rsvp;
+end
 calib_settings.rsvp_iti_ms = rsvp_iti_t;
 
 if strcmp(stim_mode,'spinning')  ||strcmp(stim_mode,'smooth pursuit')
@@ -2216,7 +2283,7 @@ end
 
 
 %% add to subject log table automatically
-log_dir = 'C:/MATLAB/Marmulator/subject_logs_bysessions';
+log_dir = setup_config.log_dir;
 logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 %% execute plots automatically
@@ -2445,7 +2512,13 @@ save_full = fullfile(save_data_dir, savefname);
 
     function pumpReward_updateGUI()
         %%%% UNCOMMENT 
-        writeline(reward_pumphand, 'RUN');
+        if reward_serial
+            writeline(reward_pumphand, 'RUN');
+        else
+            IOPort('Write',reward_hand,write_pump_cmd.on,1);
+            WaitSecs(reward_on_dur); 
+            IOPort('Write',reward_hand,write_pump_cmd.off,1); 
+        end
         set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
         drawnow;
     end
