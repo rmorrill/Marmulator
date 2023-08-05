@@ -1,5 +1,5 @@
 
-function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pumphand, reward_arduino_pin,...
+function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pumphand,...
     subject, expt_params, calib_fname, gaze_offset, trs_per_location, time_out_after, ...
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
@@ -2238,7 +2238,6 @@ reward.n_rewards_given = sum(reward_trial);
 reward.reward_sequence = reward_trial;
 reward.correct_trial = correct_trial; 
 reward.reward_vol = reward_vol;
-reward.arduino_pin_reward = reward_arduino_pin;
 reward.reward_thresh_frac_good_glint = reward_thresh;
 reward.pulse_on_dur = reward_on_dur;
 reward.wait_after_reward = wait_after_reward;
@@ -2274,7 +2273,12 @@ try
     fprintf('remote save: session data saved to %s\n', fullfile(save_data_dir_remote, savefname));
     % convert to mkTurk style data and save 
     if mkTurk_data_save
-        convert_to_mkTurkData(save_data_dir_remote,fullfile(save_data_dir, savefname));
+        try 
+            convert_to_mkTurkData(save_data_dir_remote,fullfile(save_data_dir, savefname));
+        catch me
+            disp(me);
+            disp('failed to converto mkturk data')
+        end
     end
 catch me
     disp(me);
@@ -2284,6 +2288,9 @@ end
 
 %% add to subject log table automatically
 log_dir = setup_config.log_dir;
+if ~exist(log_dir)
+    mkdir(log_dir)
+end
 logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 
 %% execute plots automatically

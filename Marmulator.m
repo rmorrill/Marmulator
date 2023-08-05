@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 04-Jan-2023 14:04:51
+% Last Modified by GUIDE v2.5 04-Aug-2023 16:17:33
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -71,7 +71,12 @@ else
     set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport); 
     set(handles.lick_arduino_com_edit, 'String', sc.arduino_lickometer_comport); 
     set(handles.com_edit, 'String', sc.arduino_pump_comport); 
-    set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
+    if isfield(sc,'expt_params_dir')
+        set(handles.expt_params_edit, 'String', sc.expt_params_dir);
+        handles.expt_dir = sc.expt_params_dir; 
+    else
+        set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
+    end
     handles.base_dir = sc.marmulator_base_dir;
     handles.default_calib_dir = sc.save_dir_local; 
     handles.setup_config = sc; 
@@ -94,8 +99,6 @@ handles.lick_arduino_connected = 0;
 handles.pump_arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
-%handles.reward_pin = 10; 
-handles.reward_pin = 2; 
 handles.reward_today = 0; % start reward counter at 0 mL 
 handles.calibration_loaded = false; 
 handles.calib_file = []; 
@@ -127,6 +130,10 @@ else
     handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
 end
 
+% default reward pump duration for arduino
+handles.reward_dur = 0.1; % around 10 microliters
+set(handles.reward_dur_edit, 'String', sprintf('%0.2f', handles.reward_dur)); 
+
 flist = dir([handles.expt_params_dir '\*.mat']); 
 flist = flist(~[flist.isdir]); 
 
@@ -138,8 +145,8 @@ set(handles.select_popup, 'String', popup_list_all);
 %keyboard
 set(handles.figure1, 'CloseRequestFcn', @cleanUpFun); 
 
-set(handles.expt_params_edit, 'String', fullfile(handles.base_dir, 'experiment_params')); 
-
+%set(handles.expt_params_edit, 'String', fullfile(handles.base_dir, 'experiment_params')); 
+set(handles.expt_params_edit, 'String', handles.expt_dir); 
 % Update handles structure
 guidata(hObject, handles);
 
@@ -163,31 +170,6 @@ function connect_push_Callback(hObject, eventdata, handles)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 % handles.arduino_comport = get(handles.com_edit, 'String');
-% if ~handles.pump_arduino_connected
-%     try
-%         handles.reward_arduino = arduino(handles.arduino_comport);
-%         flush(handles.reward_arduino);
-%         %set(gcbo, 'Enable', 'off')
-%         handles.reward_arduino.pinMode(handles.reward_pin, 'OUTPUT');
-%         handles.pump_arduino_connected = 1;
-%         set(gcbo, 'String', 'Disconnect')
-%     catch me
-%         disp(me);
-%         disp('Arduino not connected!');
-%         handles.pump_arduino_connected = 0;
-%     end
-% else
-%     fid = instrfind('Port', handles.arduino_comport); 
-%     fclose(fid); 
-%     delete(handles.reward_arduino);
-%     handles.reward_arduino = []; 
-%     handles.pump_arduino_connected = 0;
-%     set(gcbo, 'String', 'Connect Arduino')
-%     disp('Arduino disconnected'); 
-% end
-% 
-% guidata(hObject, handles);
-
 
 port = get(handles.com_edit, 'String');
 if ~handles.pump_arduino_connected
@@ -204,7 +186,8 @@ if ~handles.pump_arduino_connected
         set(gcbo, 'String', 'Disconnect');
         set(handles.com_edit, 'enable', 'off');
         handles.pump_arduino_connected = 1;
-        reward_arduino.pump_pin = 2;
+        handles.reward_vol = 100 *handles.reward_dur; % microliters pump has 1.6ml/min flow rate
+        reward_arduino.pump_pin = handles.sc.reward_pin;
         assign_pump_pins(reward_arduino); 
         pump_cmd = gen_pump_command(reward_arduino);
         handles.pump_cmd = pump_cmd; 
@@ -248,27 +231,17 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
-
 % --- Executes on button press in reward_push.
 function reward_push_Callback(hObject, eventdata, handles)
 % hObject    handle to reward_push (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
 %keyboard
-if handles.pump_arduino_connected
-    %handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
-    %WaitSecs(0.1);
-    %WaitSecs(0.);
-    %handles.reward_arduino.digitalWrite(handles.reward_pin, 0);
-    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.on, 1);
-    WaitSecs(10);
-    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.off, 1);
-    reward_given = 1;
-elseif handles.pump_serial_connected
+if handles.pump_serial_connected
     writeline(handles.reward_serial, 'RUN');
     reward_given = 1;
 else
-    disp('No connection to arduino');
+    disp('No connection to pump');
     reward_given = 0;
 end
 
@@ -288,7 +261,6 @@ if reward_given
     end
 end
 guidata(hObject, handles);
-
 
 % --- Executes on button press in run_push.
 function run_push_Callback(hObject, eventdata, handles)
@@ -378,7 +350,7 @@ end
 training_notes_str = get(handles.notes_edit, 'String'); 
 
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
-[~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
+[~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
@@ -402,7 +374,7 @@ guidata(hObject, handles);
 n_pts_tot = calib.n_pts_x * calib.n_pts_y; 
 if calib.n_completed > 3
     try
-        if contains(handles.params.save_params_name,'center_point')
+        if contains(handles.params.save_params_name,'center_point') || contains(handles.expt_params_name, 'center_point')
             questans = questdlg('Would you like to run center point estimation?', 'Center point', 'Yes', 'No', 'Yes');
             if strcmp(questans, 'Yes')
                 [offset_x, offset_y] = get_mean_x_y_pts(save_full);
@@ -482,6 +454,7 @@ function select_popup_Callback(hObject, eventdata, handles)
 %        contents{get(hObject,'Value')} returns selected item from select_popup
 curridx = get(gcbo, 'Value');
 flist = get(gcbo, 'String');
+handles.expt_params_name = flist{curridx}; 
 if curridx == 1
     handles.params_file = [];
     set(handles.hold_time_edit, 'String', '');
@@ -496,7 +469,7 @@ if curridx == 1
     set(handles.n_rsvp_edit, 'String', '');
     set(handles.break_after_edit, 'String', '');
 else
-    handles.params_file = fullfile(handles.expt_params_dir, flist{curridx});
+    handles.params_file = fullfile(handles.expt_params_dir, handles.expt_params_name);
     handles.params = load(handles.params_file);
     handles.repeats_per_loc = handles.params.repeats_per_stim;
     handles.nr_pts_x_y = [handles.params.n_pts_x, handles.params.n_pts_y];
@@ -1493,4 +1466,72 @@ if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgr
     set(hObject,'BackgroundColor','white');
 end
 
+function reward_dur_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to reward_dur_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
 
+% Hints: get(hObject,'String') returns contents of reward_dur_edit as text
+%        str2double(get(hObject,'String')) returns contents of reward_dur_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function reward_dur_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to reward_dur_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+% --- Executes on button press in update_reward_dur.
+function update_reward_dur_Callback(hObject, eventdata, handles)
+% hObject    handle to update_reward_dur (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if handles.pump_arduino_connected
+    handles.reward_dur = str2double(get(handles.reward_dur_edit, 'String'));
+    fprintf('reward duration updated to %0.2f seconds\n', handles.reward_dur)
+    handles.reward_vol = 100 *handles.reward_dur; % microliters
+else
+    disp('No arduino connection');
+end
+
+guidata(hObject, handles);
+
+% --- Executes on button press in reward_arduino_push.
+function reward_arduino_push_Callback(hObject, eventdata, handles)
+% hObject    handle to reward_arduino_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+if handles.pump_arduino_connected
+    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.on, 1);
+    WaitSecs(handles.reward_dur);
+    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.off, 1);
+    reward_given = 1;
+else
+    disp('No connection to pump');
+    reward_given = 0;
+end
+
+if reward_given
+    curr_date = datestr(now, 'yyyy-mm-dd');
+    if strcmp(handles.curr_date, curr_date)
+        handles.reward_today = handles.reward_today + handles.reward_vol/1e3;
+        set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', handles.reward_today));
+    else % leftover, so save amount and update
+        if ~isempty(handles.subject_file)
+            reward_today = getRewardTodayFromTxt(handles.reward_today_txt);
+            updateSubjectLogTable(handles.subject_file, reward_today, handles.curr_date);
+        end
+        handles.reward_today = 0 + handles.reward_vol/1e3; % reset
+        set(handles.reward_today_txt, 'String', sprintf('%0.3f mL', handles.reward_today));
+        handles.curr_date = curr_date;
+    end
+end
+
+guidata(hObject,handles);
