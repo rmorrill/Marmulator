@@ -548,7 +548,7 @@ Screen('Preference', 'TextRenderer', 0);
 % get colors
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
-whitecol_interrsvp = whitecol *0.8; 
+whitecol_interrsvp = whitecol *0.7; 
 blackcol_interrsvp = whitecol * 0.2; 
 graycol = floor((whitecol + blackcol)/2);
 
@@ -673,10 +673,8 @@ end
 
 % load all wake up images
 if wake_up_trials
-    %wu_imgs_texture = cell(1,length(wake_up_imgs));
-    %wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
-    wu_imgs_texture = zeros(1,length(wake_up_imgs));
-    wu_imgs_texture_ctrl = zeros(1,length(wake_up_imgs)); 
+    wu_imgs_texture = cell(1,length(wake_up_imgs));
+    wu_imgs_texture_ctrl = cell(1,length(wake_up_imgs)); 
     for i = 1:length(wake_up_imgs)
         wu_imgs_texture{i} = Screen('MakeTexture',win,wake_up_imgs{i});
         Screen('PreloadTextures', win,wu_imgs_texture{i});
@@ -951,7 +949,15 @@ if length(stim_rect_size_y) == 1 && length(img_seq) > 1 && strcmp(stim_mode, 'im
     stim_rect_size_y = repmat(stim_rect_size_y,size(img_seq));
 end
 
-
+% photodiode sequence 
+if isfield(s, 'photodiode_seq')
+    photodiode_seq = s.photodiode_seq; % as in img_seq, stimulus x trial 
+                                        % if 1, use whitecol and blackcol
+                                        % if 0, use whitecol_interrsvp and
+                                        % blackcol_interrsvp
+else
+    photodiode_seq = [];
+end
 
 % desired trial clip sequence
 if exist('n_rsvp_vec','var') % different number of n_rsvp per trial
@@ -1705,21 +1711,41 @@ for i = 1:n_trs_tot
             if photodiode_flash % per elias' request, show photodiode square during inter_rsvp 
                 whichflash = mod(stfridx, 2);
                 
-                if whichflash
-                    if ~inter_rsvp
-                        Screen('FillRect', win, whitecol, flash_rect);
-                        if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
+                if length(photodiode_seq) > 1
+                    if photodiode_seq(rsvp_ctr,i) == 1
+                        if whichflash
+                            Screen('FillRect', win, whitecol, flash_rect);
+                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
+                        else
+                            Screen('FillRect', win, blackcol, flash_rect);
+                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
+                        end
                     else
-                        Screen('FillRect', win, whitecol_interrsvp, flash_rect);
-                        if ctrl_screen;Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
-                    end
-                else
-                    if ~inter_rsvp
-                        Screen('FillRect', win, blackcol, flash_rect);
-                        if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
+                        if whichflash
+                            Screen('FillRect', win, whitecol_interrsvp, flash_rect);
+                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
+                        else
+                            Screen('FillRect', win,blackcol_interrsvp, flash_rect);
+                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor); end
+                        end
+                    end     
+                else 
+                    if whichflash
+                        if ~inter_rsvp
+                            Screen('FillRect', win, whitecol, flash_rect);
+                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
+                        else
+                            Screen('FillRect', win, whitecol_interrsvp, flash_rect);
+                            if ctrl_screen;Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
+                        end
                     else
-                        Screen('FillRect', win, blackcol_interrsvp, flash_rect);
-                        if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor);end
+                        if ~inter_rsvp
+                            Screen('FillRect', win, blackcol, flash_rect);
+                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
+                        else
+                            Screen('FillRect', win, blackcol_interrsvp, flash_rect);
+                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor);end
+                        end
                     end
                 end
             end
