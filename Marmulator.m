@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 04-Aug-2023 16:17:33
+% Last Modified by GUIDE v2.5 05-Aug-2023 18:37:08
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -79,6 +79,18 @@ else
     end
     handles.base_dir = sc.marmulator_base_dir;
     handles.default_calib_dir = sc.save_dir_local; 
+    if isfield(sc, 'save_dir_local_extra')
+        if ~isempty(sc.save_dir_local_extra)
+            set(handles.data_save_local_dir_edit, 'Enable', 'on')
+            handles.save_data_dir_extra = sc.save_dir_local_extra; 
+        else
+            set(handles.data_save_local_dir_edit, 'Enable', 'off')
+            handles.save_data_dir_extra = ''; 
+        end
+    else
+         set(handles.data_save_local_dir_edit, 'Enable', 'off')
+         handles.save_data_dir_extra = ''; 
+    end
     handles.setup_config = sc; 
     handles.reward_list = [get(handles.reward_popup, 'String') sc.reward_types]; 
     set(handles.reward_popup, 'String', handles.reward_list); 
@@ -356,7 +368,7 @@ set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.s
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, handles.punish_time , break_after, n_rsvp, ...
     handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
-    handles.setup_config, training_notes_str);
+    handles.setup_config, training_notes_str, handles.save_data_dir_extra);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -1535,3 +1547,47 @@ if reward_given
 end
 
 guidata(hObject,handles);
+
+
+
+function data_save_local_dir_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to data_save_local_dir_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of data_save_local_dir_edit as text
+%        str2double(get(hObject,'String')) returns contents of data_save_local_dir_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function data_save_local_dir_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to data_save_local_dir_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in update_data_save_local_dir.
+function update_data_save_local_dir_Callback(hObject, eventdata, handles)
+% hObject    handle to update_data_save_local_dir (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+if isfield(handles.setup_config, 'save_dir_local_extra')
+    start_calib_dir = handles.setup_config.save_dir_local_extra; 
+    if isfolder(start_calib_dir)
+        dname = uigetdir(start_calib_dir);
+    else
+        dname = '';
+    end
+    
+    set(handles.data_save_local_dir_edit, 'String', dname); 
+    handles.save_data_dir_extra = dname; 
+end
+
+
+guidata(hObject, handles);

@@ -4,7 +4,7 @@ function [eyetrack, calib, save_full] = EyeTracker_Calibrate_gui_fcn(reward_pump
     time_to_reward, presentation_time, session_time, eye_method_mouse,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
-    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str)
+    trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str, save_data_dir_extra)
 
 profile_memory = false; % flag for tracking memory usage
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -548,8 +548,8 @@ Screen('Preference', 'TextRenderer', 0);
 % get colors
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
-whitecol_interrsvp = whitecol *0.7; 
-blackcol_interrsvp = whitecol * 0.2; 
+whitecol_interrsvp = whitecol *0.8; 
+blackcol_interrsvp = whitecol * 0.4; 
 graycol = floor((whitecol + blackcol)/2);
 
 rect_col = [255 0 0]; 
@@ -1636,11 +1636,11 @@ for i = 1:n_trs_tot
                 % stim_rect_curr = [xcurr-rsx_curr/2 ycurr-rsy_curr/2 xcurr+rsx_curr/2 ycurr+rsy_curr/2];
                 % randomly draw from a list of 
                 %Screen('DrawTexture', win, wu_imgs_texture{wu_img_idx}, [], stim_rect);
-                Screen('DrawTexture', win, wu_imgs_texture(wu_img_idx), [], stim_rect);
+                Screen('DrawTexture', win, wu_imgs_texture{wu_img_idx}, [], stim_rect);
                 
                 if ctrl_screen 
                     %Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl{wu_img_idx}, [], stim_rect*shrink_factor);
-                    Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl(wu_img_idx), [], stim_rect*shrink_factor);
+                    Screen('DrawTexture', win_ctrl, wu_imgs_texture_ctrl{wu_img_idx}, [], stim_rect*shrink_factor);
                     Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                         dotsz, rgba_cols(:,end), [], 1);
                 end
@@ -1679,7 +1679,7 @@ for i = 1:n_trs_tot
                     if curr_in_bb && qual_check
                         rsvp_break_ctr = 0;
                         % sample command trigger starts
-                        
+   
                     elseif (~curr_in_bb || ~qual_check)
                         rsvp_break_ctr = rsvp_break_ctr + 1;
                         %rsvp_break_ctr
@@ -1692,6 +1692,7 @@ for i = 1:n_trs_tot
                         if isnan(time_to_bb(i))
                             time_to_bb(i) = GetSecs() - t_start_sec;
                         end
+                        
                     elseif (~curr_in_bb || ~qual_check) && loop_brk_ctr>3 && blink_ctr<n_frames_blink
                         blink_ctr = blink_ctr + 1;
                     else
@@ -2238,6 +2239,10 @@ eyetrack.pupil_size_y =  pupil_size_y;
 
 settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;
 settings.save_data_dir = save_data_dir;
+save_data_dir_extra
+if ~isempty(save_data_dir_extra)
+    settings.save_data_dir_extra = save_data_dir_extra;
+end
 settings.subject = subject;
 settings.window_rect = window_rect;
 settings.skip_sync_tests = skip_sync_tests ;
@@ -2311,7 +2316,15 @@ catch me
     disp('failed to save session data to remote');
 end
 
-
+if ~isempty(save_data_dir_extra) && ~strcmp(save_data_dir, save_data_dir_extra) % extra directory to save
+    try
+        save(fullfile(save_data_dir_extra, savefname), 'calib', 'calib_settings', 'eyetrack', 'settings', 'reward', 'punish');
+        fprintf('session data saved to %s\n', fullfile(save_data_dir_extra, savefname));
+    catch me
+        disp(me);
+        disp('failed to save session data to', save_data_dir_extra);
+    end
+end
 %% add to subject log table automatically
 log_dir = setup_config.log_dir;
 if ~exist(log_dir)
