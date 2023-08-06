@@ -82,14 +82,14 @@ else
     if isfield(sc, 'save_dir_local_extra')
         if ~isempty(sc.save_dir_local_extra)
             set(handles.data_save_local_dir_edit, 'Enable', 'on')
-            handles.save_data_dir_extra = sc.save_dir_local_extra; 
+            set(handles.data_save_local_dir_edit, 'String', sc.save_dir_local_extra)
         else
             set(handles.data_save_local_dir_edit, 'Enable', 'off')
-            handles.save_data_dir_extra = ''; 
+            set(handles.data_save_local_dir_edit, 'String', '')
         end
     else
          set(handles.data_save_local_dir_edit, 'Enable', 'off')
-         handles.save_data_dir_extra = ''; 
+         set(handles.data_save_local_dir_edit, 'String', '')
     end
     handles.setup_config = sc; 
     handles.reward_list = [get(handles.reward_popup, 'String') sc.reward_types]; 
