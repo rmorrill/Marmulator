@@ -1708,49 +1708,10 @@ for i = 1:n_trs_tot
                     loop_brk_ctr = 0;
                 end
             end
-            
+                    
             if photodiode_flash % per elias' request, show photodiode square during inter_rsvp 
-                whichflash = mod(stfridx, 2);
-                
-                if length(photodiode_seq) > 1
-                    if photodiode_seq(rsvp_ctr,i) == 1
-                        if whichflash
-                            Screen('FillRect', win, whitecol, flash_rect);
-                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
-                        else
-                            Screen('FillRect', win, blackcol, flash_rect);
-                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
-                        end
-                    else
-                        if whichflash
-                            Screen('FillRect', win, whitecol_interrsvp, flash_rect);
-                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
-                        else
-                            Screen('FillRect', win,blackcol_interrsvp, flash_rect);
-                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor); end
-                        end
-                    end     
-                else 
-                    if whichflash
-                        if ~inter_rsvp
-                            Screen('FillRect', win, whitecol, flash_rect);
-                            if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
-                        else
-                            Screen('FillRect', win, whitecol_interrsvp, flash_rect);
-                            if ctrl_screen;Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
-                        end
-                    else
-                        if ~inter_rsvp
-                            Screen('FillRect', win, blackcol, flash_rect);
-                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
-                        else
-                            Screen('FillRect', win, blackcol_interrsvp, flash_rect);
-                            if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor);end
-                        end
-                    end
-                end
+                drawPhotodiode(); 
             end
-            
             
             % draw informational text into control window:
             drawInfoText();
@@ -1909,39 +1870,7 @@ for i = 1:n_trs_tot
             end
             
             if give_rewards && ~skip_reward
-                if strcmp(trial_mode, 'trial') || seqidx == 0
-                    if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
-                        frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
-                    elseif strcmp(reward_on, 'location') || (seqidx == 0 && eye_method_mouse)
-                        frac_good = sum(eye_in_bb_curr)/numel(eye_in_bb_curr);
-                    end
-                    
-                    if frac_good > reward_thresh
-                        reward_this_trial = true;
-                    else
-                        reward_this_trial = false;
-                    end
-                    
-                elseif strcmp(trial_mode, 'foraging')
-                    if fix_exp_mode
-                        if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
-                            reward_this_trial = false;
-                        else
-                            reward_this_trial = true;
-                        end
-                        
-                    else
-                        if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
-                            reward_this_trial = true;
-                        else
-                            reward_this_trial = false;
-                        end
-                    end
-                end
-                
-                if manual_reward_flag
-                    reward_this_trial = true;
-                end
+                reward_this_trial = evalEye();
                 
                 if reward_this_trial
                     correct_trial(i) = true; 
@@ -1976,11 +1905,7 @@ for i = 1:n_trs_tot
                     if ~isempty(reward_pumphand)
                         if ~lick_flag || (lick_flag && i == 1) || (lick_flag && rew_trs_since_lick < stop_rewards_n_nolicks) || manual_reward_flag 
                             reward_time(i) = GetSecs()-t_start_sec;
-                            reward_trial(i) = true;
-                            %t1_rew = GetSecs();
-                            %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
-                            %drawnow;                                
-                            t2_rew = GetSecs(); 
+                            reward_trial(i) = true;             
                             %sca; keyboard 
                             pumpReward_updateGUI(); 
                         elseif lick_flag && rew_trs_since_lick >= stop_rewards_n_nolicks
@@ -2239,7 +2164,6 @@ eyetrack.pupil_size_y =  pupil_size_y;
 
 settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;
 settings.save_data_dir = save_data_dir;
-save_data_dir_extra
 if ~isempty(save_data_dir_extra)
     settings.save_data_dir_extra = save_data_dir_extra;
 end
@@ -2561,12 +2485,93 @@ save_full = fullfile(save_data_dir, savefname);
         if reward_serial
             writeline(reward_pumphand, 'RUN');
         else
-            IOPort('Write',reward_hand,write_pump_cmd.on,1);
-            WaitSecs(reward_on_dur); 
-            IOPort('Write',reward_hand,write_pump_cmd.off,1); 
+%             IOPort('Write',reward_hand,write_pump_cmd.on,1);
+%             WaitSecs(reward_on_dur); 
+%             IOPort('Write',reward_hand,write_pump_cmd.off,1);
+			time = typecast(uint16(reward_on_dur*1000),'uint8'); %convert to 2 uint8 bytes
+			IOPort('Write',reward_hand,uint8([53 97+reward_pumphand.pump_pin time(1) time(2)]),1);
         end
         set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct + bonus_reward_ct)*reward_vol + start_reward_vol));
         drawnow;
+    end
+
+    function reward_this_trial = evalEye()
+        % evaluates eye quality to determine reward 
+        if strcmp(trial_mode, 'trial') || seqidx == 0
+            if strcmp(reward_on, 'quality') || (seqidx == 0 && ~eye_method_mouse)
+                frac_good = sum(eye_data_qual_curr < 2)/numel(eye_data_qual_curr);
+            elseif strcmp(reward_on, 'location') || (seqidx == 0 && eye_method_mouse)
+                frac_good = sum(eye_in_bb_curr)/numel(eye_in_bb_curr);
+            end
+
+            if frac_good > reward_thresh
+                reward_this_trial = true;
+            else
+                reward_this_trial = false;
+            end
+
+        elseif strcmp(trial_mode, 'foraging')
+            if fix_exp_mode
+                if rsvp_break_ctr >= round(rsvp_break_after_t/1e3/ifi)
+                    reward_this_trial = false;
+                else
+                    reward_this_trial = true;
+                end
+
+            else
+                if loop_brk_ctr >= round(time_to_reward/1e3/ifi)
+                    reward_this_trial = true;
+                else
+                    reward_this_trial = false;
+                end
+            end
+        end
+
+        if manual_reward_flag
+            reward_this_trial = true;
+        end
+    end
+   
+    function drawPhotodiode()
+        whichflash = mod(stfridx, 2);
+                
+        if length(photodiode_seq) > 1
+            if photodiode_seq(rsvp_ctr,i) == 1
+                if whichflash
+                    Screen('FillRect', win, whitecol, flash_rect);
+                    if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
+                else
+                    Screen('FillRect', win, blackcol, flash_rect);
+                    if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
+                end
+            else
+                if whichflash
+                    Screen('FillRect', win, whitecol_interrsvp, flash_rect);
+                    if ctrl_screen; Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
+                else
+                    Screen('FillRect', win,blackcol_interrsvp, flash_rect);
+                    if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor); end
+                end
+            end     
+        else 
+            if whichflash
+                if ~inter_rsvp
+                    Screen('FillRect', win, whitecol, flash_rect);
+                    if ctrl_screen; Screen('FillRect', win_ctrl, whitecol, flash_rect*shrink_factor); end
+                else
+                    Screen('FillRect', win, whitecol_interrsvp, flash_rect);
+                    if ctrl_screen;Screen('FillRect', win_ctrl, whitecol_interrsvp, flash_rect*shrink_factor); end
+                end
+            else
+                if ~inter_rsvp
+                    Screen('FillRect', win, blackcol, flash_rect);
+                    if ctrl_screen;Screen('FillRect', win_ctrl, blackcol, flash_rect*shrink_factor); end
+                else
+                    Screen('FillRect', win, blackcol_interrsvp, flash_rect);
+                    if ctrl_screen;Screen('FillRect', win_ctrl, blackcol_interrsvp, flash_rect*shrink_factor);end
+                end
+            end
+        end
     end
 
 end

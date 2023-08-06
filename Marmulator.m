@@ -200,6 +200,7 @@ if ~handles.pump_arduino_connected
         handles.pump_arduino_connected = 1;
         handles.reward_vol = 100 *handles.reward_dur; % microliters pump has 1.6ml/min flow rate
         reward_arduino.pump_pin = handles.sc.reward_pin;
+        reward_arduino.pump_led_pin = handles.sc.reward_led_pin; 
         assign_pump_pins(reward_arduino); 
         pump_cmd = gen_pump_command(reward_arduino);
         handles.pump_cmd = pump_cmd; 
@@ -1521,9 +1522,12 @@ function reward_arduino_push_Callback(hObject, eventdata, handles)
 % handles    structure with handles and user data (see GUIDATA)
 
 if handles.pump_arduino_connected
-    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.on, 1);
-    WaitSecs(handles.reward_dur);
-    IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.off, 1);
+%     IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.on, 1);
+%     WaitSecs(handles.reward_dur);
+%     IOPort('Write',handles.reward_arduino.ahand,handles.pump_cmd.off, 1);
+
+    time = typecast(uint16(handles.reward_dur*1000),'uint8'); %convert to 2 uint8 bytes
+    IOPort('Write',handles.reward_arduino.ahand,uint8([53 97+handles.reward_arduino.pump_pin time(1) time(2)]),1);
     reward_given = 1;
 else
     disp('No connection to pump');
