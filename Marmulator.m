@@ -360,7 +360,7 @@ end
  
 
 training_notes_str = get(handles.notes_edit, 'String'); 
-
+handles.save_data_dir_extra = get(handles.data_save_local_dir_edit, 'String'); 
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
 [~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
@@ -1586,7 +1586,6 @@ if isfield(handles.setup_config, 'save_dir_local_extra')
     end
     
     set(handles.data_save_local_dir_edit, 'String', dname); 
-    handles.save_data_dir_extra = dname; 
 end
 
 
