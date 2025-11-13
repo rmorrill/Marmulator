@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 03-Apr-2023 13:06:20
+% Last Modified by GUIDE v2.5 29-Mar-2024 18:50:01
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -94,12 +94,14 @@ handles.trig_arduino_connected = 0;
 handles.lick_arduino_connected = 0; 
 handles.pump_arduino_connected = 0; 
 handles.pump_serial_connected = 0; 
+handles.eyetracker_connected = 0; 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
 %handles.reward_pin = 10; 
 handles.reward_pin = 4; 
 handles.reward_today = 0; % start reward counter at 0 mL 
 handles.calibration_loaded = false; 
 handles.calib_file = []; 
+handles.eyetracker_obj = []; 
 
 handles.subject = []; 
 handles.subject_file = []; 
@@ -128,7 +130,7 @@ else
     handles.syringe_diam = str2double(get(handles.diam_edit, 'String'));
 end
 
-flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = dir([handles.expt_params_dir filesep '*.mat']); 
 flist = flist(~[flist.isdir]); 
 
 handles.expt_params_list = {flist.name}; 
@@ -216,7 +218,7 @@ function reward_push_Callback(hObject, eventdata, handles)
 % hObject    handle to reward_push (see GCBO)
 % eventdata  reserved - to be defined in a future version of MATLAB
 % handles    structure with handles and user data (see GUIDATA)
-%keyboard
+
 if handles.pump_arduino_connected
     handles.reward_arduino.digitalWrite(handles.reward_pin, 1);
     %WaitSecs(0.1);
@@ -316,7 +318,7 @@ time_out_trial_init_s  = str2double(get(handles.time_out_edit, 'String'));
 n_rsvp = str2double(get(handles.n_rsvp_edit, 'String')); 
 break_after = str2double(get(handles.break_after_edit, 'String')); 
 
-if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'on')
+if isfield(handles, 'gui_lick_timer') && handles.lick_arduino_connected && strcmp(handles.gui_lick_timer.Running, 'on') 
    stop(handles.gui_lick_timer); 
 end
 
@@ -355,13 +357,16 @@ punish_time_ms = str2double(get(handles.punish_time_edit, 'String'));
 training_notes_str = get(handles.notes_edit, 'String'); 
 
 set(handles.status_text, 'String', sprintf('Session: calib_%s_%s.mat', handles.subject, session_time)); 
-[~,calib,save_full] = EyeTracker_Calibrate_gui_fcn(ra, handles.reward_pin, handles.subject,...
+
+% start the engine
+[~,calib,save_full] = engine(ra, handles.reward_pin, handles.subject,...
     handles.params_file, handles.calib_file, gaze_offset, repeats_per_loc, ...
     response_time, hold_time, trial_time, session_time, mouse_for_eye,...
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, handles.reward_today_txt,...
     handles.reward_vol/1e3, punish_time_ms , break_after, n_rsvp, ...
     handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
-    handles.setup_config, training_notes_str, img_seq, taskfilelist);
+    handles.setup_config, training_notes_str, img_seq, taskfilelist, ...
+    handles.eyetracker_obj);
 
 if ~isempty(handles.subject_file)
     %handles.reward_today = str2double(char(regexp(get(handles.reward_today_txt, 'String'), '\d*\.\d*', 'match')));
@@ -369,12 +374,11 @@ if ~isempty(handles.subject_file)
     updateSubjectLogTable(handles.subject_file, handles.reward_today, curr_date);
 end
 
-if isfield(handles, 'gui_lick_timer') && strcmp(handles.gui_lick_timer.Running, 'off')
+if isfield(handles, 'gui_lick_timer') && handles.lick_arduino_connected && strcmp(handles.gui_lick_timer.Running, 'off')
     start(handles.gui_lick_timer);
 end
 
 guidata(hObject, handles);
-
 
 n_pts_tot = calib.n_pts_x * calib.n_pts_y; 
 if calib.n_completed > 3
@@ -518,7 +522,6 @@ else
         handles.break_after = []; 
     end
     
-    %keyboard
     set(handles.trial_time_edit, 'String', sprintf('%d', handles.trial_time));
     set(handles.n_x_y_string, 'String', sprintf('[%d, %d]', handles.nr_pts_x_y(1), handles.nr_pts_x_y(2)));
     set(handles.repeats_edit, 'String', sprintf('%d', handles.repeats_per_loc));
@@ -546,7 +549,6 @@ else
         set(handles.time_out_edit, 'Enable', 'on');
     end
     
-    %keyboard
     if strcmp(handles.stim_mode, 'match_to_sample')
         set(handles.trial_time_edit,'Enable', 'on');
         set(handles.hold_time_edit, 'Enable', 'on');
@@ -615,8 +617,9 @@ function expt_params_edit_Callback(hObject, eventdata, handles)
 
 handles.expt_params_dir = get(gcbo, 'String'); 
 
-flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = dir([handles.expt_params_dir filesep '*.mat']); 
 flist = flist(~[flist.isdir]); 
+
 
 handles.expt_params_list = {flist.name}; 
 popup_list_all = ['[select experiment params]', handles.expt_params_list]; 
@@ -677,7 +680,6 @@ if ~exist(handles.subject_file, 'file')
         handles.reward_today = 0; 
     end
 else
-    %keyboard
     sf = load(handles.subject_file);
     handles.subject_log_table = sf.subject_log_table;
     curridx = find(strcmp(handles.subject_log_table.dates, curr_date));
@@ -686,7 +688,6 @@ else
     else
         handles.reward_today  = 0;
     end
-   % keyboard 
 end
 
 handles.curr_date = curr_date; 
@@ -759,7 +760,6 @@ else
     [fname_tmp, pname_tmp]= uigetfile('*.mat', 'Load calibration file',handles.default_calib_dir);
 end
 
-%keyboard
 if ~isempty(fname_tmp) && all(fname_tmp ~= 0)
     handles.calib_file = fullfile(pname_tmp, fname_tmp);
     handles.calibration_loaded = true;
@@ -893,7 +893,7 @@ function refresh_push_Callback(hObject, eventdata, handles)
 
 handles.expt_params_dir = get(handles.expt_params_edit, 'String'); 
 
-flist = dir([handles.expt_params_dir '\*.mat']); 
+flist = dir([handles.expt_params_dir filesep '*.mat']); 
 flist = flist(~[flist.isdir]); 
 
 handles.expt_params_list = {flist.name}; 
@@ -1016,7 +1016,6 @@ if ~handles.pump_serial_connected
         %set(gcbo, 'Enable', 'off')
         handles.pump_serial_connected = 1;
         set(gcbo, 'String', 'Disconnect')
-        % keyboard
         disp('Serial connected');
         
         sendParamsToPump(handles.reward_serial, handles.reward_vol, ...
@@ -1223,6 +1222,15 @@ if h.lick_arduino_connected
     end
 end
 
+if h.eyetracker_connected
+    try
+        write(handles.eyetracker, 'stop');
+        delete(handles.eyetracker);
+        disp('eyetracker disconnected')
+    catch
+    end
+end
+
 catch me
 end
 delete(hObject);
@@ -1330,8 +1338,10 @@ if ~handles.trig_arduino_connected
     readtimeout = 0.01; % 10ms 
     %[ahand, errmsg] = IOPort('OpenSerialPort', port, sprintf('BaudRate=%d ReceiveTimeout=0.1', baudrate));
     %configstr = ''; 
-    configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate, readtimeout); 
+    %configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate, readtimeout); 
+    configstr = sprintf('DataBits=8 Parity=None StopBits=1 DTR=1 RTS=1 FlowControl=Hardware HardwareBufferSizes=16,16 BaudRate=%d ReceiveTimeout=0.1', baudrate);
     [ahand, errmsg] = IOPort('OpenSerialPort', port, configstr);
+    
     if isempty(errmsg) % good, success
         fprintf('Trigger arduino on port %s is connected\n', port);
         trigger_arduino.ahand = ahand; 
@@ -1530,3 +1540,68 @@ if ~isempty(fname_tmp) && all(fname_tmp ~= 0)
 else
     set(handles.custom_seq_path_edit, 'String', ''); 
 end
+
+
+
+function eyetrack_ip_port_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to eyetrack_ip_port_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of eyetrack_ip_port_edit as text
+%        str2double(get(hObject,'String')) returns contents of eyetrack_ip_port_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function eyetrack_ip_port_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to eyetrack_ip_port_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end
+
+
+% --- Executes on button press in connect_eyetracker_push.
+function connect_eyetracker_push_Callback(hObject, eventdata, handles)
+% hObject    handle to connect_eyetracker_push (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+if ~handles.eyetracker_connected
+    % then connect
+    ip_port_str = get(handles.eyetrack_ip_port_edit, 'String');
+    ip_port_cell = strsplit(ip_port_str, ':'); 
+    if numel(ip_port_cell) ~= 2
+        warndlg('enter an IP and port address  in the follow format: 127.0.0.1:12345')
+        return
+    end
+    ip_addr = ip_port_cell{1};
+    port = str2num(ip_port_cell{2});
+
+    connect_time = 3;
+    fprintf('will attempt to connect to %s:%d for %d sec\n', ip_addr, port, connect_time);
+    try
+        handles.eyetracker_obj = EyetrackData(); 
+        handles.eyetracker_obj.connectTCPIP(ip_addr, port, connect_time); 
+    catch
+        fprintf('error connecting\n')
+        fprintf('is the eyetracker running and accepting TCP/IP connections?\n')
+        return
+    end
+    fprintf('Connected!\n')
+    set(handles.eyetrack_ip_port_edit, 'enable', 'off')
+    set(gcbo, 'String', 'Stop eyetracking')
+    handles.eyetracker_connected = 1; 
+else
+    handles.eyetracker_obj.delete(); 
+    set(gcbo, 'String', 'Start eyetracking');
+    set(handles.eyetrack_ip_port_edit, 'enable', 'on');
+    handles.eyetracker_connected = 0; 
+end
+guidata(hObject, handles);
+
+

@@ -1,6 +1,12 @@
 function logData_bysession(log_dir,session_file_path)
 
 load(session_file_path); 
+save_split = split(session_file_path, '/'); 
+save_base = fullfile(save_split{1:find(strcmp(save_split, 'Marmulator'))}); 
+
+if isunix
+    save_base = ['/' save_base]; 
+end
 
 % check if subject folder exists
 if ~exist(fullfile(log_dir,settings.subject))
@@ -17,16 +23,22 @@ columns = {'Date','Session','Offset x', 'Offset y', 'Calibration Used?', 'Stimul
     'cumulative n_trials','reward vol','reward type','cumulative reward vol','n_trials_licked','n_imgs_seen','cumulative n_imgs_seen',...
     'experiment param file'}; 
 
-session_file_dir = fullfile(log_dir,settings.subject,strcat(date_session,'.mat')); 
-if ~exist(session_file_dir) 
+session_file_dir = fullfile(save_base, log_dir, settings.subject); 
+if ~exist(session_file_dir, 'dir')
+    mkdir(session_file_dir); 
+end
+session_file = fullfile(session_file_dir,strcat(date_session,'.mat')); 
+
+
+if ~exist(session_file) 
     T = cell(1,length(columns));
-    save(session_file_dir,'T'); 
+    save(session_file,'T'); 
     curridx= 1;
     cumulative_n_trials = 0; 
     cumulative_reward = 0; 
     cumulative_n_imgs_seen = 0;
 else
-    load(session_file_dir); 
+    load(session_file); 
     curridx = height(T) + 1; 
     cumulative_n_trials = sum(T.('correct n_trials')); 
     cumulative_reward = sum(T.('reward vol')); 
@@ -213,5 +225,5 @@ end
 
 T = cell2table(T); 
 T.Properties.VariableNames = columns;
-save(session_file_dir,'T'); 
+save(session_file,'T'); 
 end

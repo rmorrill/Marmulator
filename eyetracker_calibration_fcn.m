@@ -1,12 +1,6 @@
 %%%% DATA LOAD
 function eyetracker_calibration_fcn(session_file_full)
 
-%close all;
-%session_file = 'calib_West_2022-12-18_14-18-16.mat';
-%session_file = 'calib_West_2022-12-28_13-22-26.mat';
-%session_file = 'calib_West_2023-01-02_12-53-14.mat';
-%session_data_dir = 'C:\Data\West\2023-01-02\calibration\';
-
 [fp1, fp2, fp3] = fileparts(session_file_full); 
 session_file = [fp2 fp3]; 
 session_data_dir = fp1; 
@@ -14,13 +8,13 @@ session_data_dir = fp1;
 
 %%
 %%%% CALIBARTION SETTINGS
-calc_calib_coeffs_on = 'all_pts'; % 'all pts' OR 'means'
+calc_calib_coeffs_on = 'all_pts'; % 'all_pts' OR 'means'
 %calc_calib_coeffs_on = 'means'; % 'all pts' OR 'means'
 outlier_rejection = 'by_stimulus'; % 'all_pts' or 'by_stimulus';
 remove_unrewarded_trs = true;
 remove_freeze_trs = true;
 SAVE_CALIB = 1;
-show_outliers_plot2 = 0;
+show_outliers_plot2 = 1;
 filter_by_eye_area = 1;
 %ea_thresh = 0.04;
 ea_thresh = 0.03;
@@ -47,6 +41,7 @@ settings = sf.settings;
 reward = sf.reward; 
 %punish = sf.punish; 
 
+
 if isfield(calib_settings, 'fixation_to_init')
     if ~isnan(calib_settings.fixation_to_init)
         t_win_start = (calib.time_to_reward + calib_settings.fixation_to_init)/1000;
@@ -57,9 +52,15 @@ if isfield(calib_settings, 'fixation_to_init')
 else
     t_win_start = calib.time_to_reward/1000;
 end
+%keyboard 
+
+
+
 
 %t_win = [0 1.5];
 t_win = [-t_win_start 0];
+
+t_win = [-0.3 0]
 
 t_win_relative_to = 'offset'; % 'onset' or 'offset'
 
@@ -103,6 +104,7 @@ fprintf('Include only reward trs: %d\n', remove_unrewarded_trs);
 fprintf('remove trials that were frozen: %d\n', remove_freeze_trs);
 
 calib_seq = calib.sequence(1:calib.n_completed);
+%keyboard
 %reward_seq = reward.reward_sequence(1:calib.n_completed); % previous Marmulator version
 reward_seq = reward.correct_trial(1:calib.n_completed); % 2022-11-25 YJ. includes correct trials with no licks
 fprintf('\nPerformance summary:\n');
@@ -113,45 +115,56 @@ for i = 1:n_calib_pts
     %fprintf('\tMean time to reward = %0.2f +/- %0.2f ms');
 end
 
-%% PLOT FOR EYE AREA PT REMOVAL
-eye_area = eyetrack.pupil_size_x .* eyetrack.pupil_size_y * pi;
+if isempty(eyetrack.pupil_size_x) || isempty(eyetrack.pupil_size_y)
+    eye_area = eyetrack.rad.^2 * pi; 
+else
+    eye_area = eyetrack.pupil_size_x .* eyetrack.pupil_size_y * pi;
+end
 ar = eyetrack.pupil_size_x./eyetrack.pupil_size_y;
 qual = eyetrack.quality;
 
-ar_mu = mean(ar);
-ar_std = std(ar);
-aspect_reject_thresh = ar_mu + ar_std*ar_reject_sds;
+aspect_reject_thresh = NaN; 
 
-nY3 = 3;
-nX3 = 1;
-f3 = figure('Position', [680   220   371   758], 'color', 'w', 'Name', 'Filter by eye');
-subplot(nY3,nX3,1);
-scatter(x_data_raw, y_data_raw, 10, eye_area, 'filled')
-colormap(jet)
-cb = colorbar;
-set(get(cb,'Title'),'String','Eye area')
-hold on
-xlabel('x');
-ylabel('y');
-title('Eye area by location');
+% 
+% %% PLOT FOR EYE AREA PT REMOVAL
+% 
 
-subplot(nY3,nX3,2);
-scatter(eye_area, ar, 10, 'k')
-ylabel('aspect ratio');
-xlabel('eye area');
-hold on
-xL = xlim;
-yL = ylim;
-plot(xL, [aspect_reject_thresh, aspect_reject_thresh], 'r--');
-plot([ea_thresh, ea_thresh], yL, 'r--');
-
-subplot(nY3, nX3, 3);
-filtidx = eye_area>ea_thresh;
-s1= scatter(x_data_raw(filtidx), y_data_raw(filtidx), 10, 'filled');
-s1.MarkerFaceAlpha = 0.2;
-
-hold on
-title(sprintf('filter: eye_area>%0.3f\n%0.1f %% removed', ea_thresh, sum(~filtidx)*100/numel(filtidx)));
+% 
+% ar_mu = mean(ar);
+% ar_std = std(ar);
+% aspect_reject_thresh = ar_mu + ar_std*ar_reject_sds;
+% 
+% nY3 = 3;
+% nX3 = 1;
+% f3 = figure('Position', [680   220   371   758], 'color', 'w', 'Name', 'Filter by eye');
+% subplot(nY3,nX3,1);
+% 
+% scatter(x_data_raw, y_data_raw, 10, eye_area, 'filled')
+% colormap(jet)
+% cb = colorbar;
+% set(get(cb,'Title'),'String','Eye area')
+% hold on
+% xlabel('x');
+% ylabel('y');
+% title('Eye area by location');
+% 
+% subplot(nY3,nX3,2);
+% scatter(eye_area, ar, 10, 'k')
+% ylabel('aspect ratio');
+% xlabel('eye area');
+% hold on
+% xL = xlim;
+% yL = ylim;
+% plot(xL, [aspect_reject_thresh, aspect_reject_thresh], 'r--');
+% plot([ea_thresh, ea_thresh], yL, 'r--');
+% 
+% subplot(nY3, nX3, 3);
+% filtidx = eye_area>ea_thresh;
+% s1= scatter(x_data_raw(filtidx), y_data_raw(filtidx), 10, 'filled');
+% s1.MarkerFaceAlpha = 0.2;
+% 
+% hold on
+% title(sprintf('filter: eye_area>%0.3f\n%0.1f %% removed', ea_thresh, sum(~filtidx)*100/numel(filtidx)));
 
 %% outlier rejection:
 figure(f1)
@@ -162,11 +175,16 @@ pts_keep = [];
 subplot_er(n_y, n_x, 2);
 cla
 
-if filter_by_eye_area
-    reject_on_ar = ar> aspect_reject_thresh | eye_area <= ea_thresh;
-else
-    reject_on_ar = ar> aspect_reject_thresh;
-end
+% if filter_by_eye_area
+%     reject_on_ar = ar> aspect_reject_thresh | eye_area <= ea_thresh;
+% else
+%     reject_on_ar = ar> aspect_reject_thresh;
+% end
+
+
+% RM TEMP
+
+reject_on_ar = false(1,length(eye_area)); 
 
 if remove_unrewarded_trs
     include_trs = reward_seq;
@@ -518,44 +536,44 @@ xlabel('eyetracker measured y');
 %% PLOT DIFFERENT TRANSFORMS
 tts = 0.3; % transform text spacing
 
-%% PROJECTIVE TRANSFORM
-lin_reg_mode = 'projective';
-exclude_vec = [];
-
-p = [];
-q = [];
-for i = 1:n_calib_pts
-    if ~isempty(pts_keep{i})
-        p = [p;mu_x_all(i),mu_y_all(i)];
-        q = [q;calib.pts(i,:)];
-    end
-end
-
-if size(q,1)>=4
-    v = homography_solve(p,q);
-    % all_pts
-    % p = [all_x_pts, all_y_pts];
-    % q = [calib_x_all, calib_y_all];
-    coeff_X = v(:,1);
-    coeff_Y = v(:,2);
-    coeff_Proj = v(:,3);
-    
-    subplot_er(n_y, n_x, 15);
-    plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols, v);
-    
-    %%
-    subplot_er(n_y, n_x, 16);
-    writeCoeffsTextIntoBox(coeff_X, coeff_Y, coeff_Proj);
-    
-    subplot_er(n_y, n_x, 17);
-    plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all, v);
-    
-    if SAVE_CALIB
-        saveCalib(coeff_X, coeff_Y, coeff_Proj, pts_keep, calib, calib_settings, settings,...
-            lin_reg_mode, calibration_save_dir, session_ts, calc_calib_coeffs_on,...
-            outlier_rejection, outlier_thresh, filter_by_eye_area, ea_thresh, aspect_reject_thresh);
-    end
-end
+% %% PROJECTIVE TRANSFORM
+% lin_reg_mode = 'projective';
+% exclude_vec = [];
+% 
+% p = [];
+% q = [];
+% for i = 1:n_calib_pts
+%     if ~isempty(pts_keep{i})
+%         p = [p;mu_x_all(i),mu_y_all(i)];
+%         q = [q;calib.pts(i,:)];
+%     end
+% end
+% 
+% if size(q,1)>=4
+%     v = homography_solve(p,q);
+%     % all_pts
+%     % p = [all_x_pts, all_y_pts];
+%     % q = [calib_x_all, calib_y_all];
+%     coeff_X = v(:,1);
+%     coeff_Y = v(:,2);
+%     coeff_Proj = v(:,3);
+% 
+%     subplot_er(n_y, n_x, 15);
+%     plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols, v);
+% 
+%     %%
+%     subplot_er(n_y, n_x, 16);
+%     writeCoeffsTextIntoBox(coeff_X, coeff_Y, coeff_Proj);
+% 
+%     subplot_er(n_y, n_x, 17);
+%     plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all, v);
+% 
+%     if SAVE_CALIB
+%         saveCalib(coeff_X, coeff_Y, coeff_Proj, pts_keep, calib, calib_settings, settings,...
+%             lin_reg_mode, calibration_save_dir, session_ts, calc_calib_coeffs_on,...
+%             outlier_rejection, outlier_thresh, filter_by_eye_area, ea_thresh, aspect_reject_thresh);
+%     end
+% end
 
 %% Gather the points for regression
 % this uses all the points

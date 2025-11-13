@@ -18,7 +18,8 @@ function [offset_x, offset_y] = get_mean_x_y_pts(filepath)
 
     t_win = [-0.6 0]; 
     t_win_relative_to = 'offset'; % 'onset' or 'offset' 
-    remove_unrewarded_trs = true; 
+    %remove_unrewarded_trs = true; 
+    remove_unrewarded_trs = false; 
 
     n_trs_complete = E.calib.n_completed;
     stim_start_t = E.calib.start_t;
