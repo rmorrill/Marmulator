@@ -9,20 +9,18 @@ session_data_dir = fp1;
 %%
 %%%% CALIBARTION SETTINGS
 calc_calib_coeffs_on = 'all_pts'; % 'all_pts' OR 'means'
-%calc_calib_coeffs_on = 'means'; % 'all pts' OR 'means'
 outlier_rejection = 'by_stimulus'; % 'all_pts' or 'by_stimulus';
 remove_unrewarded_trs = true;
 remove_freeze_trs = true;
 SAVE_CALIB = 1;
 show_outliers_plot2 = 1;
 filter_by_eye_area = 1;
-%ea_thresh = 0.04;
-ea_thresh = 0.03;
-ar_reject_sds = 2.5; % number of aspect ratio SDs for rejection
+ea_thresh = 0.03; % not currently being used 11/19/2025
+ar_reject_sds = 2.5; % number of aspect ratio SDs for rejection, not currently being used 11/29/2025
 
 
 %% THREE FIGURES:
-% F1: main
+% F1: main, calibration results
 % F2: manual outlier rejection
 % F3: location-specific plotting
 
@@ -41,7 +39,6 @@ settings = sf.settings;
 reward = sf.reward; 
 %punish = sf.punish; 
 
-
 if isfield(calib_settings, 'fixation_to_init')
     if ~isnan(calib_settings.fixation_to_init)
         t_win_start = (calib.time_to_reward + calib_settings.fixation_to_init)/1000;
@@ -54,28 +51,23 @@ else
 end
 %keyboard 
 
-
-
-
 %t_win = [0 1.5];
-t_win = [-t_win_start 0];
-
+%_win = [-t_win_start 0];
 t_win = [-0.3 0]
 
 t_win_relative_to = 'offset'; % 'onset' or 'offset'
-
 
 subject = settings.subject;
 
 x_data_raw = eyetrack.eyepos_raw(:,1)';
 y_data_raw = eyetrack.eyepos_raw(:,2)';
 
-% SET F1 n_subplots
-f1 = figure('Position', [16    62   948   1200], 'Color', 'w');
+% Initialize figure 1, calibration results
+f1 = figure('Position', [16    62   948   1200], 'Color', 'w', 'Name', sprintf('Results: %s', session_file{1}));
 n_x = 2;
-n_y = 11;
+n_y = 9;
 
-subplot_er(n_y, n_x, 1);
+subplot_er(n_y, n_x, 1); % raw points over time
 scatter(x_data_raw, y_data_raw, 10, eyetrack.time);
 title('raw, color = time')
 ylabel('y');
@@ -124,11 +116,8 @@ ar = eyetrack.pupil_size_x./eyetrack.pupil_size_y;
 qual = eyetrack.quality;
 
 aspect_reject_thresh = NaN; 
-
-% 
+ 
 % %% PLOT FOR EYE AREA PT REMOVAL
-% 
-
 % 
 % ar_mu = mean(ar);
 % ar_std = std(ar);
@@ -172,7 +161,7 @@ figure(f1)
 outlier_thresh = 3;
 pts_keep = [];
 
-subplot_er(n_y, n_x, 2);
+subplot_er(n_y, n_x, 2); % raw points with outliers marked w gray x
 cla
 
 % if filter_by_eye_area
@@ -287,8 +276,8 @@ switch outlier_rejection
             curr_x = x_data_raw(these_pts);
             curr_y = y_data_raw(these_pts);
             
-            outlier_x = isoutlier(curr_x, 'ThresholdFactor', outlier_thresh);
-            outlier_y = isoutlier(curr_y, 'ThresholdFactor', outlier_thresh);
+            outlier_x = isoutlier(curr_x, 'ThresholdFactor', outlier_thresh) | isnan(curr_x);
+            outlier_y = isoutlier(curr_y, 'ThresholdFactor', outlier_thresh) | isnan(curr_y);
             %outlier_x = false(1,numel(curr_x));
             %outlier_y = false(1,numel(curr_y));
             
@@ -315,7 +304,7 @@ box off
 title(sprintf('outliers: %s, thresh = %d MAD\n%0.2f %% (%d) outliers AUTO removed', outlier_rejection, outlier_thresh, outlier_ct*100/numel(x_data_raw), outlier_ct));
 
 %% manual outlier removal
-f3 = figure('Color', 'w', 'Position', [670   496   857   502]);
+f3 = figure('Color', 'w', 'Position', [670   496   857   502], 'Name', 'Manual outlier removal');
 
 clear p_mu p_sdx p_sdy
 p_mu = [];
@@ -338,6 +327,7 @@ for i = 1:n_calib_pts
     end
 end
 uistack([p_mu p_sdx p_sdy], 'top');
+
 axis ij
 xlabel('x');
 ylabel('y');
@@ -349,7 +339,7 @@ if ~isempty(roi.Position)
     xQ = roi.Position(:,1);
     yQ = roi.Position(:,2);
     
-    f4 = figure('Color', 'w', 'Position', [670   496   857   502]);
+    f4 = figure('Color', 'w', 'Position', [670   496   857   502], 'Name', 'Included data points, all');
     
     p_mu = [];
     p_sdx = [];
@@ -365,10 +355,10 @@ if ~isempty(roi.Position)
             s = scatter(pts_keep{i}(:,1), pts_keep{i}(:,2), 10, cols(i,:), 'filled');
             hold on
             s.MarkerFaceAlpha = 0.3;
-            curr_sdx = std(pts_keep{i}(:,1));
-            curr_mux = mean(pts_keep{i}(:,1));
-            curr_sdy = std(pts_keep{i}(:,2));
-            curr_muy = mean(pts_keep{i}(:,2));
+            curr_sdx = nanstd(pts_keep{i}(:,1));
+            curr_mux = nanmean(pts_keep{i}(:,1));
+            curr_sdy = nanstd(pts_keep{i}(:,2));
+            curr_muy = nanmean(pts_keep{i}(:,2));
             p_mu(end+1) = plot(curr_mux, curr_muy, 'Marker', '.', 'Color', cols(i,:));
             hold on
             p_sdx(end+1) = plot([curr_mux - curr_sdx curr_mux + curr_sdx], [curr_muy curr_muy], 'Color', cols(i,:), 'LineWidth', 2);
@@ -383,8 +373,8 @@ if ~isempty(roi.Position)
     
 end
 
-%% add a second figure for location-specific outlier removal
-f2 = figure('Position', [1490  397 1531 889], 'Color', 'w');
+%% add a second figure to display included points by grid position
+f2 = figure('Position', [1490  397 1531 889], 'Color', 'w', 'Name', 'Included points by grid position');
 %keyboard
 
 n_y2 = calib.n_pts_y;
@@ -451,11 +441,10 @@ yL_set = [min([yL_all{:}]) max([yL_all{:}])];
 set(sp, 'YLim', yL_set);
 set(sp, 'XLim', xL_set);
 
-% remove outliers
-
+%% plot into main figure 
 figure(f1);
 
-subplot_er(n_y, n_x, 3);
+subplot_er(n_y, n_x, 3); % plot of means +/- SD 
 mu_x_all = zeros(1,n_calib_pts);
 mu_y_all = zeros(1,n_calib_pts);
 mu_xy_all = zeros(1,n_calib_pts);
@@ -463,8 +452,6 @@ for i = 1:n_calib_pts
     if ~isempty(pts_keep{i})
         pts_curr_x = pts_keep{i}(:,1);
         pts_curr_y = pts_keep{i}(:,2);
-        %mu_x = median(pts_curr_x);
-        %mu_y = median(pts_curr_y);
         mu_x = mean(pts_curr_x);
         mu_y = mean(pts_curr_y);
         std_x = std(pts_curr_x);
@@ -483,9 +470,9 @@ end
 box off
 axis ij
 
-title('Means +/- SDs');
+title('raw means +/- SDs, post-manual curation');
 %%
-subplot_er(n_y, n_x, 4);
+subplot_er(n_y, n_x, 4); % stimulus positions
 
 for i = 1:n_calib_pts
     plot(calib.pts(i, 1), calib.pts(i,2), 'Color', cols(i,:), 'Marker', 's', 'MarkerSize', 10, 'LineWidth', 1.5);
@@ -499,12 +486,13 @@ ylim([0 disp_y_len]);
 box off
 ylabel('pixel y');
 xlabel('pixel x');
+title('Stimulus grid positions on screen')
 
 %% X regress plot
 
 subplot_er(n_y, n_x, 5);
 scatter(mu_x_all(mu_x_all~=0), calib_x(mu_x_all~=0), 20, cols(mu_x_all~=0, :), 'filled');
-title('x regress');
+
 xvals_eval = linspace(min(xlim), max(xlim), 10);
 for i = 1:n_calib_pts
     if mu_x_all(i) ~= 0
@@ -512,15 +500,15 @@ for i = 1:n_calib_pts
             'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom');
     end
 end
-ylabel('stim location on x');
+ylabel('stim location, x');
 xlabel('eyetracker measured x');
-
+title('x regress');
 hold on
 
 %% Y regress plot
 subplot_er(n_y, n_x, 6);
 scatter(mu_y_all(mu_y_all~=0), calib_y(mu_y_all~=0), 20, cols(mu_y_all~=0,:), 'filled');
-title('y regress');
+
 yvals_eval = linspace(min(xlim), max(xlim), 10);
 for i = 1:n_calib_pts
     if mu_y_all(i) ~= 0
@@ -529,8 +517,9 @@ for i = 1:n_calib_pts
     end
 end
 hold on
-ylabel('stim location on y');
+ylabel('stim location, y');
 xlabel('eyetracker measured y');
+title('y regress');
 %axis square
 
 %% PLOT DIFFERENT TRANSFORMS
@@ -616,13 +605,13 @@ coeff_Proj = [];
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
 figure(f1)
-subplot_er(n_y, n_x, 7);
+subplot_er(n_y, n_x, 7); % cross-term means as dots 
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 8);
+subplot_er(n_y, n_x, 8); %  cross-term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 9);
+subplot_er(n_y, n_x, 9); % cross-term, all points 
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 if SAVE_CALIB
@@ -637,13 +626,13 @@ lin_reg_mode = 'no cross term';
 coeff_Proj = [];
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
-subplot_er(n_y, n_x, 11);
+subplot_er(n_y, n_x, 11); % no cross-term means as dots 
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 12);
+subplot_er(n_y, n_x, 12); %  no cross-term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 13);
+subplot_er(n_y, n_x, 13); % no cross-term, all points 
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 
@@ -660,13 +649,13 @@ coeff_Proj = [];
 
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
-subplot_er(n_y, n_x, 19);
+subplot_er(n_y, n_x, 15); % cross term and xy term, means as dots 
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 20);
+subplot_er(n_y, n_x, 16); % cross term and xy term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 21);
+subplot_er(n_y, n_x, 17); % cross term and xy term, all points 
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 
@@ -676,10 +665,10 @@ if SAVE_CALIB
         outlier_rejection, outlier_thresh, filter_by_eye_area, ea_thresh, aspect_reject_thresh);
 end
 
-%%
+%% ADD SUP TITLE 
 
-sgtitle(session_file);
-
+%sgtitle(session_file);
+%suplabel(session_file{1}, 't')
 
 %% plot means
     function plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols, v)
@@ -730,7 +719,7 @@ sgtitle(session_file);
         
     end
 
-%% plot all eval points
+%% FUNCTION: plot all eval points
     function plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all, v)
         
         if nargin == 9
@@ -797,15 +786,15 @@ sgtitle(session_file);
         title('all (included) points: calibration applied');
     end
 
-%% write coeffs into box
+%% FUNCTION: write coeffs into box
     function writeCoeffsTextIntoBox(coeff_X, coeff_Y, coeff_Proj)
-        tts = 0.3;
-        fs = 13;
+        tts = 0.25;
+        fs = 11;
         for i = 1:length(coeff_X)
-            text(0.1, tts*(4-i), sprintf('cX(%d) = %0.3f', i, coeff_X(i)));
-            text(0.4, tts*(4-i), sprintf('cY(%d) = %0.3f', i, coeff_Y(i)));
+            text(0.1, tts*(4-i), sprintf('cX(%d) = %0.2f', i, coeff_X(i)), 'FontSize', fs);
+            text(0.55, tts*(4-i), sprintf('cY(%d) = %0.2f', i, coeff_Y(i)), 'FontSize', fs);
             if nargin == 3
-                text(0.8, tts*(4-i), sprintf('cProj(%d) = %0.3f', i, coeff_Proj(i)));
+                text(0.8, tts*(4-i), sprintf('cProj(%d) = %0.2f', i, coeff_Proj(i)));
             end
             axis tight
         end
@@ -813,10 +802,10 @@ sgtitle(session_file);
         set(gca, 'XColor', 'w');
         set(gca, 'YColor', 'w');
         box off;
-        title('coeffs', 'FontSize', 14)
+        title('coeffs', 'FontSize', fs)
     end
 
-%% calculate transform
+%% FUNCTION: calculate transform
     function [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in)
         
         if strcmp(lin_reg_mode,'cross term')
@@ -835,7 +824,7 @@ sgtitle(session_file);
         
     end
 
-%% save calibration
+%% FUNCTION: save calibration
     function saveCalib(coeff_X, coeff_Y, coeff_Proj, pts_keep, calib, calib_settings, settings,...
             lin_reg_mode, calibration_save_dir, session_ts, calc_calib_coeffs_on,...
             outlier_rejection, outlier_thresh, filter_by_eye_area, ea_thresh, aspect_reject_thresh)
@@ -865,5 +854,6 @@ sgtitle(session_file);
         
     end
 
+%% FUNCTION: save output plot
 
 end

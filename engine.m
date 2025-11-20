@@ -759,6 +759,15 @@ if strcmp(stim_mode, 'movie')
     end
 end
 
+%% SETUP: AVMOVIES_IMAGES
+% what we need: 
+% vector for AV, A, V 
+% V could be movies or static images 
+% two modes when dealing with movie formats: take the duration from the movie
+% or take the duration specified by stimulus dur variable 
+
+
+
 %% SETUP: wake up movie
 % wake_up movies (keyboard v)
 if isfield(s,'wake_up_movie')
