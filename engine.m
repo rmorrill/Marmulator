@@ -8,22 +8,18 @@ function [eyetrack, calib, save_full] = engine(reward_pumphand, reward_arduino_p
 
 profile_memory = true; % flag for tracking memory usage
 
-
-reset_movie_time_index = 0; % move to better place RJM
-
 %profile on -memory
-
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
 % workspace for debugging
 
-KbName('UnifyKeyNames')
+KbName('UnifyKeyNames');
 
 newPriority = 1;
 oldPriority = Priority(newPriority);
 fprintf('PTB old priority: %d, new priority %d\n', oldPriority, newPriority);
 PsychJavaSwingCleanup;
 
-PsychPortAudio('Close')
+PsychPortAudio('Close');
 
 if ~isempty(calib_fname)
     c = load(calib_fname);
@@ -119,8 +115,6 @@ window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
 screenid_stim = setup_config.screenid_stim;
 screenid_ctrl = setup_config.screenid_ctrl;
-%screenid_stim = setup_config.screenid_ctrl;  % RJM!!
-%screenid_ctrl = setup_config.screenid_stim;
 calibration_win_len = s.calibration_win_len;
 calibration_win_ht = s.calibration_win_ht;
 n_pts_x = s.n_pts_x;
@@ -165,6 +159,22 @@ img_folder = s.img_folder;
 pulse_size = s.pulse_size;
 movie_folder = s.movie_folder;
 movie_rate = s.movie_rate;
+if isfield(s, 'movie_play_sound')
+    movie_play_sound = s.movie_play_sound; 
+else
+    movie_play_sound = false; 
+end
+if isfield(s, 'reset_movie_time_index')
+    reset_movie_time_index = s.reset_movie_time_index; 
+else
+    reset_movie_time_index = false; % move to better place RJM
+end
+if isfield(s, 'loop_movie')
+    loop_movie = s.loop_movie; 
+else
+    loop_movie = 1; % must be numeric 
+end
+
 scale_fact_move = s.scale_fact_move;
 scale_fact_size = s.scale_fact_size;
 mvdot_sz = s.mvdot_sz;
@@ -175,9 +185,9 @@ n_gaze_pts_draw = s.n_gaze_pts_draw;
 gaze_pt_dot_col = s.dot_col;
 gaze_pt_sz = s.gaze_pt_sz;
 draw_retain_bb_pts = s.draw_retain_bb_pts;
-color_shift_feedback = s.color_shift_feedback;
-rew_col_start = s.rew_col_start;
-rew_col_end = s.rew_col_end;
+%color_shift_feedback = s.color_shift_feedback; % REMOVE FEAT: CSF
+%rew_col_start = s.rew_col_start;
+%rew_col_end = s.rew_col_end; % REMOVE FEAT: CSF
 play_reward_sound = s.play_reward_sound;
 reward_sound_file = s.reward_sound_file;
 give_punishments = s.give_punishments;
@@ -252,6 +262,8 @@ else
     crosshair_lw = []; 
 end
     
+ffmpegPath = 'ffmpeg'; % for linux systems, future: add this into the setup to allow for windows use, e.g. 'C:\ffmpeg\bin\ffmpeg.exe' 
+
 %% SETUP: fixation mode/rsvp 
 % fix mode will use presentation time for each stimulus duration
 if isfield(s, 'rsvp_iti_t')
@@ -367,7 +379,6 @@ rgba_cols = [gaze_pt_dot_cols; alphas];
 dotsz = gaze_pt_sz;
 
 %% SETUP: image presentation mode
-
 if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mode, 'smooth pursuit')
     
     [img_fnames, img_folder_idx] = ret_image_fnames(img_folder);
@@ -542,7 +553,6 @@ PsychJavaSwingCleanup;
 AssertOpenGL;
 InitializePsychSound(1);
 Screen('Preference', 'Verbosity', 1);
-%Screen('Preference', 'SkipSyncTests', skip_sync_tests)
 Screen('Preference', 'SkipSyncTests', 0);
 Screen('Preference', 'VisualDebugLevel', 0);
 Screen('Preference', 'TextRenderer', 0);
@@ -550,8 +560,6 @@ Screen('Preference', 'TextRenderer', 0);
 % get colors
 whitecol = WhiteIndex(screenid_stim);
 blackcol = BlackIndex(screenid_stim);
-%whitecol_interrsvp = whitecol *0.8;
-%blackcol_interrsvp = whitecol * 0.2;
 graycol = (whitecol + blackcol)/2;
 
 rect_col = graycol;
@@ -574,7 +582,6 @@ end
 %shrink_factor = 0.5;
 shrink_factor = 0.5; % RJM
 ctrl_rect_debug = shrink_factor * win_rect;
-%ctrl_rect_debug = 
 
 screen_hz = Screen('NominalFrameRate', screenid_stim);
 ifi=Screen('GetFlipInterval', win);
@@ -649,14 +656,17 @@ if trig_flag
 end
 
 %% COLOR SHIFT FEEDBACK: DEPRECATED???
-if color_shift_feedback
-    n_frames_til_rew = round(time_to_reward/1e3/ifi);
-    col_shift_change = nan(3,n_frames_til_rew);
-    col_shift_change(1,:) = linspace(rew_col_start(1), rew_col_end(1), n_frames_til_rew);
-    col_shift_change(2,:) = linspace(rew_col_start(2), rew_col_end(2), n_frames_til_rew);
-    col_shift_change(3,:) = linspace(rew_col_start(3), rew_col_end(3), n_frames_til_rew);
-    col_shift_change(4,:) = ones(1,n_frames_til_rew)*0.5;
-end
+
+% REMOVE FEAT: CSF
+% if color_shift_feedback
+%     n_frames_til_rew = round(time_to_reward/1e3/ifi);
+%     col_shift_change = nan(3,n_frames_til_rew);
+%     col_shift_change(1,:) = linspace(rew_col_start(1), rew_col_end(1), n_frames_til_rew);
+%     col_shift_change(2,:) = linspace(rew_col_start(2), rew_col_end(2), n_frames_til_rew);
+%     col_shift_change(3,:) = linspace(rew_col_start(3), rew_col_end(3), n_frames_til_rew);
+%     col_shift_change(4,:) = ones(1,n_frames_til_rew)*0.5;
+% end
+% REMOVE FEAT: CSF
 
 %% LOAD: preload all textures
 % load all image textures
@@ -727,26 +737,105 @@ if wake_up_trials
         end
     end
 end
+%% SETUP: Reward and Punish sound handles using PsychPortAudio
+audio_handle = [];
+
+
+% SET PPA DEVICE 
+aud_devs = PsychPortAudio('GetDevices'); 
+aud_dev_names = {aud_devs.DeviceName}; 
+this_dev_idx = find(contains(aud_dev_names, 'Rubix22')); 
+fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName); 
+
+% reward
+[aud_y, PPA_fs] = psychwavread(reward_sound_file);
+[samplecount,ninchannels] = size(aud_y);
+aud_y = repmat(aud_y',2/ninchannels,1);
+suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
+%ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
+
+%devnr = 9; 
+devnr = this_dev_idx-1; 
+ppa_handle = PsychPortAudio('Open', devnr, 1, 1, PPA_fs,[], [],suggestedLat);
+audio_handle(1) = PsychPortAudio('CreateBuffer', ppa_handle, aud_y);
+% punish
+[aud_pun_y, ~] = psychwavread(punish_sound_file);
+[samplecount,ninchannels] = size(aud_pun_y);
+aud_pun_y = repmat(aud_pun_y',2/ninchannels,1);
+audio_handle(2) = PsychPortAudio('CreateBuffer', ppa_handle, aud_pun_y);
+
 
 %% SETUP: movie mode 
-specialFlags = 2; 
+specialFlags = 2; % RJM was 2 
 if strcmp(stim_mode, 'movie')
+
     PsychImaging('PrepareConfiguration');
-    moviefiles_all = dir(movie_folder);
-    movienames =  {moviefiles_all(~[moviefiles_all.isdir]).name};
+    movieExts = {'.mp4', '.mov', '.avi', '.mkv', '.mpg', '.mpeg', '.m4v'};
+
+    files_all = dir(movie_folder);
+    fnames_all =  {files_all(~[files_all.isdir]).name};
+    movienames = {}; 
+    if movie_play_sound 
+        audionames = {}; 
+    end
+
+    for m = 1:numel(fnames_all)
+        curr_fname = fnames_all{m};
+        [~,basename,ext] = fileparts(curr_fname);
+        ext_lower = lower(ext);
+        %ext_lower =
+        if ismember(ext_lower, movieExts)
+            movienames{end+1} = curr_fname;
+            if movie_play_sound
+                % check if it has audio file
+                audioname_curr = sprintf('%s_audio.wav', basename);
+                if exist(fullfile(movie_folder, audioname_curr), 'file')
+                    audionames{end+1}  = audioname_curr;
+                else
+                    audio_curr_full = fullfile(movie_folder, audioname_curr); 
+                    fprintf('movies with sound mode: split audio for %s not found, will generate now using ffmpeg...\n', curr_fname);
+                    cmdAudio = sprintf('"%s" -y -i "%s" -vn -acodec pcm_s16le "%s"', ...
+                        ffmpegPath, fullfile(movie_folder,curr_fname), audio_curr_full);
+                    [statusAudio, outAudio] = system(cmdAudio);
+                    filter_norm_audio_fcn(audio_curr_full); 
+                    if statusAudio ~= 0
+                        warning('ffmpeg audio-only failed for %s:\n%s', fullfile(movie_folder,curr_fname), outAudio);
+                        audionames{end+1} = ''; 
+                    else
+                        audionames{end+1} = audioname_curr; 
+                    end
+                end
+            else
+                audionames = []; % for save 
+            end
+        end
+    end
+
     %moviePtr = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64);
     n_stim = numel(movienames); 
-    fprintf('Found %d movie (?) files in folder %s\n', n_stim, movie_folder)
+    fprintf('Found %d movie (?) files in folder %s\n', n_stim, movie_folder);
     fprintf('%s\n', movienames{:}); 
 
-    %moviePtr = cell(1,n_stim); 
-    moviePtr = zeros(1,n_stim); 
-    for m = 1:numel(movienames)
+    moviePtr = zeros(1,n_stim);
+    movie_durations = zeros(1,n_stim); 
+    movie_fr_cnt = zeros(1,n_stim); 
+    movie_audio_handle_idx = zeros(1,numel(movienames)); 
+    for m = 1:n_stim
         %[moviePtr{m}, movieduration, fps, imgw, imgh, ~, ~, hdrStaticMetaData] = Screen('OpenMovie', win, fullfile(movie_folder, movienames{1}), [], 1, 64, 4); %RJM
         curr_movie_full = fullfile(movie_folder, movienames{m}); 
         %moviePtr(m) = Screen('OpenMovie', win, curr_movie_full, [], 1, 64,
         %4); %RJM added 64 flag for looped playback - is it necessary? 
-        moviePtr(m) = Screen('OpenMovie', win, curr_movie_full, [], 1, specialFlags, 4); %RJM
+        [moviePtr(m), movie_durations(m), ~, ~, ~, movie_fr_cnt(m)] = Screen('OpenMovie', win, curr_movie_full, [], 1, specialFlags, 4); %RJM
+        if movie_play_sound
+            % set up sound handle for each 
+            curr_audio_full = fullfile(movie_folder, audionames{m}); 
+            [aud_mov_y, aud_mov_fs] = psychwavread(curr_audio_full);
+            if aud_mov_fs ~= PPA_fs % check for sample rate compatibility 
+                warning('movie audio sample rate mismatch: Fs of %s is %d but PsychPortAudio device is set to %d\n', curr_audio_full, aud_mov_fs, PPA_fs); 
+            end
+            movie_audio_handle_idx(m) = length(audio_handle)+1; 
+            audio_handle(movie_audio_handle_idx(m)) = PsychPortAudio('CreateBuffer', ppa_handle, aud_mov_y');
+        end
         fprintf('loaded %s into ptr %d\n', curr_movie_full, m); 
         WaitSecs(0.1); 
         Screen('SetMovieTimeIndex', moviePtr(m), 0);
@@ -754,10 +843,12 @@ if strcmp(stim_mode, 'movie')
         %Screen( OpenMovie , windowPtr, moviefile [, async=0] [, preloadSecs=1] [, specialFlags1=0][, pixelFormat=4][, maxNumberThreads=-1][, movieOptions]);
         %Screen('PlayMovie', moviePtr, movie_rate, 1+8);
         %Screen('PlayMovie', moviePtr(m), movie_rate, 1+4);
-        Screen('PlayMovie', moviePtr(m), movie_rate, 1);
+        Screen('PlayMovie', moviePtr(m), movie_rate, loop_movie);
         WaitSecs(0.1);
+
     end
 end
+
 
 %% SETUP: AVMOVIES_IMAGES
 % what we need: 
@@ -765,7 +856,11 @@ end
 % V could be movies or static images 
 % two modes when dealing with movie formats: take the duration from the movie
 % or take the duration specified by stimulus dur variable 
+% Goal: this could be a general mode for all stimulus presentation 
 
+% for images, we need: 
+
+% for movies, we need: 
 
 
 %% SETUP: wake up movie
@@ -964,8 +1059,8 @@ if strcmp(stim_mode, 'images') | strcmp(stim_mode, 'movie')
     if ~constant_bg_mode && ~strcmp(stim_mode, 'movie')
         img_seq = reshape(img_seq, [n_rsvp, n_trs_requested]);
     end
-    
     n_trs_curr = size(img_seq, 2);
+    
 elseif m2s_mode
     if isempty(img_seq) % if img_seq was not loaded from GUI
         n_trs_requested = trs_per_location;
@@ -1034,7 +1129,7 @@ if wake_up_trials && ~m2s_mode % for now, m2s doesn't work with wakeup images
     wu_seq = wu_seq(randperm(length(wu_seq)));
     
     % modify img sequence as well
-    if strcmp(stim_mode, 'images')
+    if strcmp(stim_mode, 'images') || strcmp(stim_mode, 'movie')
         wu_tr_idx = find(tr_seq == 0);
         for i = 1:numel(wu_tr_idx)
             wu_tr_idx_curr = wu_tr_idx(i);
@@ -1104,7 +1199,6 @@ elseif strcmp(trial_mode, 'foraging')
 end
 
 %% SETUP: bounding boxes
-
 % set up bounding boxes for display on the control screen
 cols = round(distinguishable_colors(n_calib_pts+1)*255);
 
@@ -1147,29 +1241,6 @@ if m2s_mode
 end
 
 
-%% SETUP: Reward and Punish sound handles using PsychPortAudio
-audio_handle = [];
-% reward
-[aud_y, aud_fs] = psychwavread(reward_sound_file);
-[samplecount,ninchannels] = size(aud_y);
-aud_y = repmat(aud_y',2/ninchannels,1);
-suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
-%ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
-%devnr = numel(PsychPortAudio('GetDevices'))-1; 
-%devnr = 9; 
-devnr = []; 
-ppa_handle = PsychPortAudio('Open', devnr, [], 1, aud_fs,2, [],suggestedLat);
-%audio_handle(1) = PsychPortAudio('Open', 1, [], 1, aud_fs,2, [],suggestedLat);
-%audio_handle(1) = PsychPortAudio('FillBuffer', ppa_handle, aud_y);
-audio_handle(1) = PsychPortAudio('CreateBuffer', ppa_handle, aud_y);
-
-% punish
-[aud_pun_y, aud_pun_fs] = psychwavread(punish_sound_file);
-[samplecount,ninchannels] = size(aud_pun_y);
-aud_pun_y = repmat(aud_pun_y',2/ninchannels,1);
-%audio_handle(2) = PsychPortAudio('Open', 1, [], 1, aud_pun_fs,2,[],suggestedLat);
-%audio_handle(2) = PsychPortAudio('FillBuffer', ppa_handle, aud_pun_y);
-audio_handle(2) = PsychPortAudio('CreateBuffer', ppa_handle, aud_pun_y);
 
 %% SETUP: ITI, timing 
 
@@ -1326,7 +1397,7 @@ for i = 1:n_trs_tot
     
     idx_all = idx_all +1;
     
-    drawInfoText();
+    %drawInfoText();
     drawBoundingBoxes();
     if draw_retain_bb_pts
         drawGoodEyePts(0);
@@ -1344,7 +1415,7 @@ for i = 1:n_trs_tot
     
     for j = 1:iti_frames(i)
         idx_all = idx_all +1;
-        drawInfoText();
+        %drawInfoText();
         
         drawBoundingBoxes();
         if draw_retain_bb_pts
@@ -1387,7 +1458,7 @@ for i = 1:n_trs_tot
                 end
             end
             
-            drawInfoText();
+            %drawInfoText();
             checkLick();
             
             if seqidx ~= 0
@@ -1441,7 +1512,7 @@ for i = 1:n_trs_tot
                 wu_mov_start_t(end+1) = GetSecs()-t_start_sec;
                 while wake_up_movie
                     disp('wake_up_movie is playing')
-                    drawInfoText();
+                    %drawInfoText();
                     checkLick();
                     Screen('PlayMovie', moviePtr_wu, movie_rate, 1);
                     [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
@@ -1509,8 +1580,8 @@ for i = 1:n_trs_tot
     
     if strcmp(stim_mode, 'moving_dot')
         curr_rect = stim_rect;
-        curr_x = round(rand * [curr_rect(3) - curr_rect(1)]) + curr_rect(1);
-        curr_y = round(rand * [curr_rect(4) - curr_rect(2)]) + curr_rect(2);
+        curr_x = round(rand * (curr_rect(3) - curr_rect(1))) + curr_rect(1);
+        curr_y = round(rand * (curr_rect(4) - curr_rect(2))) + curr_rect(2);
         dx_sign = sign(randn);
         dy_sign = sign(randn);
         size_curr = mvdot_sz;
@@ -1536,9 +1607,14 @@ for i = 1:n_trs_tot
         img_idx = img_seq(i); 
     end
 
-    if strcmp(stim_mode, 'movie') && reset_movie_time_index
-        Screen('SetMovieTimeIndex', moviePtr(img_idx), 0);
-        fprintf('Reset movie time idx for %d to 0\n', img_idx);
+    if strcmp(stim_mode, 'movie') 
+        if movie_play_sound
+            PsychPortAudio('FillBuffer', ppa_handle, audio_handle(movie_audio_handle_idx(img_idx))); 
+        end
+        if reset_movie_time_index
+            Screen('SetMovieTimeIndex', moviePtr(img_idx), 0);
+            fprintf('Reset movie time idx for %d to 0\n', img_idx);
+        end
         %WaitSecs(0.1);
     end
     
@@ -1577,10 +1653,12 @@ for i = 1:n_trs_tot
             Screen('FillRect', win, bg_col_val);
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
             
-            if seqidx ~= 0 && strcmp(trial_mode, 'foraging') && color_shift_feedback && loop_brk_ctr>0
-                Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
-                if ctrl_screen; Screen('FillRect', win_ctrl, col_shift_change(:,loop_brk_ctr), curr_bb); end
-            end
+            % REMOVE FEAT: CSF
+            % if seqidx ~= 0 && strcmp(trial_mode, 'foraging') && color_shift_feedback && loop_brk_ctr>0
+            %     Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
+            %     if ctrl_screen; Screen('FillRect', win_ctrl, col_shift_change(:,loop_brk_ctr), curr_bb); end
+            % end
+            % REMOVE FEAT: CSF
             
             [eyeposx_cur, eyeposy_cur] = get_eyetracker_draw_dots();
             eye_data_qual_curr(stfridx) = eyetracker_qual(idx_all);
@@ -1611,6 +1689,8 @@ for i = 1:n_trs_tot
             if seqidx ~= 0  && ~inter_rsvp
                 %% RUN: STIM MODE SWITCH FOR DRAWING
                 switch stim_mode
+                    case 'audio'
+
                     case 'spinning'
                         seqidx = tr_seq(stfridx,i);
                         xcurr = all_pts(seqidx,1);
@@ -1714,6 +1794,21 @@ for i = 1:n_trs_tot
                         t_mov_start = GetSecs();
                         waitforimage = 0; % RJM
 
+                        if movie_play_sound
+                            ppa_status = PsychPortAudio('GetStatus', ppa_handle);
+                            if ~ppa_status.Active
+                                %PsychPortAudio('Volume', ppa_handle, 2)
+                                mti = Screen('GetMovieTimeIndex', moviePtr(img_idx)); 
+                                if mti < 0.01
+                                    PsychPortAudio('Start', ppa_handle,1,vbl+ifi)
+                                end
+                            end
+                        end
+                        
+                        if stfridx == 1 && reset_movie_time_index
+                            Screen('SetMovieTimeIndex', moviePtr(img_idx), 0.0)
+                        end
+
                         movtex_new = Screen('GetMovieImage', win, moviePtr(img_idx), waitforimage);
                         if movtex_new>0 
                             if rsvpfridx > 1
@@ -1721,9 +1816,9 @@ for i = 1:n_trs_tot
                                 %delete(movtex)
                             end
                             movtex = movtex_new;
+                            mti = Screen('GetMovieTimeIndex', moviePtr(img_idx)); 
+                            fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx); 
                             %Screen('Close', movtex_new);
-
-
                         end
                         %
                         Screen('DrawTexture', win, movtex, [],  stim_rect);
@@ -1738,8 +1833,6 @@ for i = 1:n_trs_tot
                         %    fprintf('frame %d new\n', stfridx) 
                         %    Screen('Close', movtex_new)
                         %end
-                       
-                        
 
                         if ctrl_screen
 
@@ -1750,12 +1843,9 @@ for i = 1:n_trs_tot
                             %end
                             %Screen('DrawTexture', win_ctrl, movtex, [],  stim_rect*shrink_factor);
 
-
-
                             %Screen('DrawDots', win_ctrl, [eyeposx_cur, eyeposy_cur]*shrink_factor,...
                             %    dotsz, rgba_cols(:,end), [], 1);
                         end
-
 
                         % for movies, re-draw dots
                         %                         if stimulus_pre_dot && ~stimulus_pre_dot_disappear
@@ -1845,7 +1935,6 @@ for i = 1:n_trs_tot
                     wake_up_image_displayed{i} = wu_image_fname_list{wu_img_idx};
                 end
                 
-                % randomly draw from a list of
                 Screen('DrawTexture', win, wu_imgs_texture(wu_img_idx), [], stim_rect);
                 
                 if ctrl_screen
@@ -1949,7 +2038,7 @@ for i = 1:n_trs_tot
 
             
             % draw informational text into control window:
-            drawInfoText();
+            %drawInfoText();
             drawBoundingBoxes();
             
             %t2_frame = GetSecs();
@@ -2015,6 +2104,12 @@ for i = 1:n_trs_tot
                 end_stim = 1;
             elseif seqidx == 0 && stfridx >= wake_up_stim_frames
                 end_stim = 1;
+            %elseif strcmp(stim_mode, 'movie') && ~loop_movie && Screen('GetMovieTimeIndex', moviePtr(img_idx))>= movie_durations(img_idx)-0.001
+            elseif strcmp(stim_mode, 'movie') && ~loop_movie && stfridx >= movie_fr_cnt(img_idx)
+                end_stim = 1; 
+                %sca
+                %keyboard
+               
             end
         elseif strcmp(trial_mode, 'foraging')
             if (fix_exp_mode && ~m2s_mode)|| (m2s_mode && rsvp_ctr == 1)
@@ -2070,14 +2165,24 @@ for i = 1:n_trs_tot
         
         if end_stim
             Screen('FillRect', win, bg_col_val);
+
+            if strcmp(stim_mode, 'movie') && movie_play_sound
+                ppa_status = PsychPortAudio('GetStatus', ppa_handle);
+                if ppa_status.Active
+                    PsychPortAudio('Stop', ppa_handle)
+                end
+            end
             
             if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
-            
-            if seqidx ~= 0 && give_rewards && color_shift_feedback && loop_brk_ctr > 0
-                Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
-                if ctrl_screen; Screen('FillRect', win_ctrl, col_shift_change(:,loop_brk_ctr), curr_bb); end
-            end
-            drawInfoText();
+
+            % % REMOVE FEAT: CSF
+            % if seqidx ~= 0 && give_rewards && color_shift_feedback && loop_brk_ctr > 0
+            %     Screen('FillRect', win, col_shift_change(:,loop_brk_ctr), curr_bb);
+            %     if ctrl_screen; Screen('FillRect', win_ctrl, col_shift_change(:,loop_brk_ctr), curr_bb); end
+            % end
+            % % REMOVE FEAT: CSF
+
+            %drawInfoText();
             drawBoundingBoxes();
             if draw_retain_bb_pts
                 drawGoodEyePts(0);
@@ -2160,17 +2265,16 @@ for i = 1:n_trs_tot
                     %fprintf('****REWARD TRIAL %d\n', i);
                     
                     if play_reward_sound
-                        %sound(aud_y, aud_fs);
-
                        % t1 = PsychPortAudio('Start',audio_handle(1), [], 0,1);
                        t_tmp1 = GetSecs; 
+                       %PsychPortAudio('Volume', ppa_handle, 1.0)
                        PsychPortAudio('FillBuffer', ppa_handle, audio_handle(1)); 
                        t_tmp2 = GetSecs; 
                       
                        t1 = PsychPortAudio('Start',ppa_handle, [], 0,1);
                        %fprintf('********fill buffer tool %0.5s\n', t_tmp2-t_tmp1)
-                        disp('sound played');
-                        %PsychPortAudio('Stop', audio_handle(1));
+                       %disp('sound played');
+                       %PsychPortAudio('Stop', audio_handle(1));
                     end
                     
                     if trig_flag && sampleCommand_trig_hi && ~isempty(sampleCommand_trig_cmd)
@@ -2204,7 +2308,7 @@ for i = 1:n_trs_tot
                     end
                     
                     for w = 1:wait_after_rew_frames
-                        drawInfoText();
+                        %drawInfoText();
                         drawBoundingBoxes();
                         if draw_retain_bb_pts
                             drawGoodEyePts(0);
@@ -2227,6 +2331,7 @@ for i = 1:n_trs_tot
                 if play_punish_sound
                     %sound(aud_pun_y, aud_pun_fs);
                     PsychPortAudio('FillBuffer', ppa_handle, audio_handle(2))
+                    %PsychPortAudio('Volume', ppa_handle, 1.0)
                     %t1 = PsychPortAudio('Start', audio_handle(2), 1, 0,1);
                     t1 = PsychPortAudio('Start', ppa_handle, 1, 0,1);
                     disp('sound played');
@@ -2236,7 +2341,7 @@ for i = 1:n_trs_tot
                 for p = 1:n_pun_frames
                     Screen('FillRect', win, blackcol);
                     if ctrl_screen; Screen('FillRect', win_ctrl, blackcol); end
-                    drawInfoText(1);
+                    %drawInfoText(1);
                     drawBoundingBoxes();
                     checkLick();
                     if draw_retain_bb_pts
@@ -2374,6 +2479,9 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') ||strcmp(stim_mod
 elseif strcmp(stim_mode, 'movie')
     calib_settings.img_list = movienames; 
     calib_settings.movie_folder = movie_folder; 
+    calib_settings.reset_movie_time_index = reset_movie_time_index; 
+    calib_settings.movie_play_sound = movie_play_sound; 
+    calib_settings.movie_audionames = audionames; 
 else
     calib_settings.img_list = [];
 end
