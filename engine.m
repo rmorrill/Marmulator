@@ -394,6 +394,7 @@ if strcmp(stim_mode, 'images') || strcmp(stim_mode,'spinning') || strcmp(stim_mo
     n_stim = numel(imgs);
     
     [unique_img_folder,~,ic] = unique(img_folder_idx);
+    n_img_folders = length(unique_img_folder); 
     n_stim_per_folder = accumarray(ic,1);
 else
     img_folder_idx = []; 
@@ -985,7 +986,7 @@ if strcmp(stim_mode, 'images') | strcmp(stim_mode, 'movie')
         n_reps = ceil(n_trs_requested*n_rsvp/sum(n_stim_per_folder));
         img_seq = [];
         bg_seq = [];
-        for i = 1:length(unique_img_folder)
+        for i = 1:n_img_folders
             stidx = sum(n_stim_per_folder(1:i-1))+1;
             img_seq_tmp = repmat(stidx:stidx+sum(n_stim_per_folder(i))-1, [1, n_reps]);
             n_trs_per_folder(i) = floor(length(img_seq_tmp)/n_rsvp);
@@ -1032,8 +1033,8 @@ if strcmp(stim_mode, 'images') | strcmp(stim_mode, 'movie')
         % number of trials specified in the Marmulator GUI will now apply
         % to each image folder
         img_seq = [];
-        for i = 1:length(unique_img_folder)
-            n_rsvps = n_trs_requested/length(unique_img_folder)*n_rsvp;
+        for i = 1:n_img_folders
+            n_rsvps = n_trs_requested/n_img_folders*n_rsvp;
             x = floor(n_rsvps/n_stim_per_folder(i));
             if i > 1
                 idx_start = n_stim_per_folder(i-1);
@@ -1049,7 +1050,25 @@ if strcmp(stim_mode, 'images') | strcmp(stim_mode, 'movie')
                 img_seq = [img_seq randperm(n_stim_per_folder(i), n_rsvps)+idx_start];
             end
         end
-        
+
+    elseif strcmp(image_order, 'ISI')
+        img_seq = []; 
+        % for ISI-style stimulus presentation in which multiple stimuli are
+        % presented in sequence with no gaps. one set of stimulus
+        % presentations is a trial, and the nr of images in this set is
+        % determined by n_rsvp. each trial drawes from only one folder of
+        % images. 
+
+        x = ceil(n_trs_requested/n_img_folders); 
+       
+        for q = 1:x
+            tr_order_curr = randperm(n_img_folders); 
+            for t = 1:length(tr_order_curr)
+                img_idx_curr = find(img_folder_idx==tr_order_curr(t));
+                img_seq = [img_seq img_idx_curr(randperm_k(length(img_idx_curr), n_rsvp))];
+            end
+        end
+        img_seq = img_seq(1:(n_trs_requested*n_rsvp)); 
     else % sequential presentation
         n_rsvps = n_trs_requested*n_rsvp;
         x = floor(n_rsvps/n_stim);
@@ -1145,7 +1164,11 @@ else
     n_trs_tot = n_trs_requested;
 end
 
-image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
+if n_rsvp == 0
+    image_displayed = cell(1,n_trs_tot);
+else
+    image_displayed = cell(n_rsvp, n_trs_tot); % will be empty for all except 'images' sessions
+end
 
 if strcmp(stim_mode,'spinning') || strcmp(stim_mode,'smooth pursuit')
     n_trs_tot = trs_per_location;
@@ -1794,6 +1817,10 @@ for i = 1:n_trs_tot
                         t_mov_start = GetSecs();
                         waitforimage = 0; % RJM
 
+                        if isempty(image_displayed{i})
+                            image_displayed{i} = movienames{img_idx}; 
+                        end
+
                         if movie_play_sound
                             ppa_status = PsychPortAudio('GetStatus', ppa_handle);
                             if ~ppa_status.Active
@@ -1804,7 +1831,7 @@ for i = 1:n_trs_tot
                                 end
                             end
                         end
-                        
+
                         if stfridx == 1 && reset_movie_time_index
                             Screen('SetMovieTimeIndex', moviePtr(img_idx), 0.0)
                         end
