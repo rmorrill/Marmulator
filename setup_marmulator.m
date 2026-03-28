@@ -3,7 +3,10 @@
 %%%% Set these parameters: 
 marmulator_base_dir = '/home/ryan/Documents/MATLAB/Marmulator'; 
 save_dir_local = '/home/ryan/Data/Marmulator'; 
-save_dir_remote = '/mnt/hopper_freiwald/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+%save_dir_remote = '/mnt/hopper_freiwald/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+%save_dir_remote = ''; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+save_dir_remote = '/mnt/goedel_store01/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+
 eyetracker_toolbox_dir = ''; 
 
 serial_pump_comport = '/dev/ttyUSB0'; 
@@ -17,8 +20,9 @@ trial_pin = 7;
 stim_pin = 10; 
 sampleCommand_pin = []; % set to [] if you don't want it
 
-%default_gaze_center_adjust = [0, 210]; % [x, y]
-default_gaze_center_adjust = [0,0]; % positive y moves down, negative y moves up
+%default_gaze_center_adjust = [0, 210]; % [x, y] positive y moves down, negative y moves up
+%default_gaze_center_adjust = [0,140]; % changed from this on 3/27/26
+default_gaze_center_adjust = [0,0]; % for ISI
 
 screenid_stim = 1; 
 screenid_ctrl = 0; 

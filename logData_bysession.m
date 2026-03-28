@@ -38,6 +38,7 @@ if ~exist(session_file)
     cumulative_reward = 0; 
     cumulative_n_imgs_seen = 0;
 else
+    
     load(session_file); 
     curridx = height(T) + 1; 
     cumulative_n_trials = sum(T.('correct n_trials')); 
