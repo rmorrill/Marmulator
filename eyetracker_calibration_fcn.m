@@ -2,7 +2,7 @@
 function eyetracker_calibration_fcn(session_file_full)
 
 [fp1, fp2, fp3] = fileparts(session_file_full); 
-session_file = [fp2 fp3]; 
+session_file = char([fp2 fp3]); 
 session_data_dir = fp1; 
 
 
@@ -63,7 +63,7 @@ x_data_raw = eyetrack.eyepos_raw(:,1)';
 y_data_raw = eyetrack.eyepos_raw(:,2)';
 
 % Initialize figure 1, calibration results
-f1 = figure('Position', [16    62   948   1200], 'Color', 'w', 'Name', sprintf('Results: %s', session_file{1}));
+f1 = figure('Position', [16    62   948   1200], 'Color', 'w', 'Name', sprintf('Results: %s', session_file));
 n_x = 2;
 n_y = 9;
 
