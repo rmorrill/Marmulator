@@ -1,38 +1,38 @@
 % run this once, or anytime configuration params change! 
 
 %%%% Set these parameters: 
-marmulator_base_dir = 'C:\MATLAB\Marmulator'; 
-save_dir_local = 'C:\MATLAB\eyetracker_calibration_071222\calib_data'; 
-save_dir_remote = 'Z:\Data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
-eyetracker_toolbox_dir = 'C:\Users\Hector\Desktop\eyetracker\Interfaces\3rdParty\Microsoft-Windows\MATLAB\ViewPoint_EyeTracker_Toolbox'; 
+marmulator_base_dir = '/home/ryan/Documents/MATLAB/Marmulator'; 
+save_dir_local = '/home/ryan/Data/Marmulator'; 
+%save_dir_remote = '/mnt/hopper_freiwald/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+%save_dir_remote = ''; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
+save_dir_remote = '/mnt/goedel_store01/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
 
-serial_pump_comport = 'COM9'; 
+eyetracker_toolbox_dir = ''; 
+
+serial_pump_comport = '/dev/ttyUSB0'; 
 arduino_pump_comport = ''; 
-arduino_lickometer_comport = 'COM13'; 
-arduino_triggers_comport = 'COM8'; 
+arduino_lickometer_comport = '/dev/ttyACM1'; 
+arduino_triggers_comport = '/dev/ttyACM0'; 
 
 % arduino pin configuration
 session_pin = 4; 
 trial_pin = 7; 
 stim_pin = 10; 
-sampleCommand_pin = 12; % set to [] if you don't want it
+sampleCommand_pin = []; % set to [] if you don't want it
 
-default_gaze_center_adjust = [0, 210]; % [x, y]
-default_gaze_center_adjust = [0,116]; %2022-10-25 yj
-default_gaze_center_adjust = [0,70]; 
-default_gaze_center_adjust = [0,116]; 
-default_gaze_center_adjust = [0,90]; % 2022-12-03 yj 
-default_gaze_center_adjust = [0,45]; % 2022-12-03 yj 
+%default_gaze_center_adjust = [0, 210]; % [x, y] positive y moves down, negative y moves up
+%default_gaze_center_adjust = [0,140]; % changed from this on 3/27/26
+default_gaze_center_adjust = [0,0]; % for ISI
 
 screenid_stim = 1; 
-screenid_ctrl = 2; 
+screenid_ctrl = 0; 
 
-deviceBrand = 'UperfectMonitor'; 
+deviceBrand = 'ASUS'; 
 
 screenInches = [10.9,6.1,12.5]; % [27.7,15.5]; 
-screenPhysicalPixels = [3840,2160]; 
+screenPhysicalPixels = [1920,1080]; 
 % screnPixels and screenScale are set in the Windows Setting 
-screenPixels = [2560, 1440]; %
+screenPixels = [1920, 1080]; %
 screenScale = 100; % percentage 
 devicePixelRatio = 1; 
 if ~isempty(devicePixelRatio) && isempty(screenPixels)
@@ -46,7 +46,7 @@ dist_to_screen = 13 /2.54; %cm to inches
 deg_to_inch_on_screen = tan(0.5*pi/180)*dist_to_screen*2; %inches
 deg_to_pixel_on_screen = deg_to_inch_on_screen * viewportPPI; 
 
-reward_types = {'coconut_milk', 'apple_juice', 'water', 'ensure_diluted', 'evaporated_milk','ensure-yogurt_diluted'}; 
+reward_types = {'NONE', 'maple_diluted', 'coconut_milk', 'apple_juice', 'water', 'ensure_diluted', 'evaporated_milk','ensure-yogurt_diluted'}; 
 
 
 %%%% DO NOT MODIFY %%%%
