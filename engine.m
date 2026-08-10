@@ -744,8 +744,13 @@ audio_handle = [];
 
 % SET PPA DEVICE 
 aud_devs = PsychPortAudio('GetDevices'); 
+for i = 1:numel(aud_devs)
+    fprintf('Index: %d, Name: %s\n', aud_devs(i).DeviceIndex, aud_devs(i).DeviceName);
+end
 aud_dev_names = {aud_devs.DeviceName}; 
+
 this_dev_idx = find(contains(aud_dev_names, 'Rubix22')); 
+% this_dev_idx = find(contains(aud_dev_names, 'default'));
 fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName); 
 
 % reward
@@ -753,11 +758,13 @@ fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName);
 [samplecount,ninchannels] = size(aud_y);
 aud_y = repmat(aud_y',2/ninchannels,1);
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
-%ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
+% ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
 
-%devnr = 9; 
-devnr = this_dev_idx-1; 
+devnr = -1; 
+% devnr = this_dev_idx-1; 
+% print("Using audio device %d\n", devnr)
 ppa_handle = PsychPortAudio('Open', devnr, 1, 1, PPA_fs,[], [],suggestedLat);
+
 audio_handle(1) = PsychPortAudio('CreateBuffer', ppa_handle, aud_y);
 % punish
 [aud_pun_y, ~] = psychwavread(punish_sound_file);
