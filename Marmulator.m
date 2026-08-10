@@ -75,6 +75,7 @@ else
     set(handles.com_edit, 'String', sc.arduino_pump_comport); 
     set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
     handles.base_dir = sc.marmulator_base_dir;
+    handles.log_dir = sc.log_dir; 
     handles.default_calib_dir = sc.save_dir_local; 
     handles.setup_config = sc; 
     handles.reward_list = [get(handles.reward_popup, 'String') sc.reward_types]; 
@@ -685,7 +686,8 @@ new_subject = get(gcbo, 'String');
 
 handles.subject = new_subject; 
 %handles.reward_total = 0; 
-log_dir = fullfile(handles.base_dir, 'subject_logs');
+%log_dir = fullfile(handles.base_dir, 'subject_logs');
+log_dir = handles.log_dir; 
 if ~exist(log_dir)
     mkdir(log_dir); 
 end
