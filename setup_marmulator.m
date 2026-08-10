@@ -12,8 +12,6 @@ log_dir = fullfile(save_dir_local, 'subject_logs'); % directory for saving subje
 eyetracker_IP = '129.85.17.222'; % as a str
 eyetracker_port = '35359'; %as a str 
 
-
-
 serial_pump_comport = '/dev/ttyUSB0'; 
 arduino_pump_comport = ''; 
 arduino_lickometer_comport = '/dev/ttyACM1'; 

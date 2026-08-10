@@ -110,7 +110,7 @@ dontsync2 = 1;
 save_params_name = s.save_params_name;
 save_params_here = s.save_params_here;
 expt_type = s.expt_type; 
-eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
+%eyetracker_toolbox_dir = setup_config.eyetracker_toolbox_dir;
 window_rect = s.window_rect;
 skip_sync_tests = s.skip_sync_tests;
 screenid_stim = setup_config.screenid_stim;
@@ -2607,7 +2607,7 @@ eyetrack.quality = eyetracker_qual;
 eyetrack.pupil_size_x =  pupil_size_x;
 eyetrack.pupil_size_y =  pupil_size_y;
 
-settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;
+%settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;
 settings.save_data_dir = save_data_dir;
 settings.subject = subject;
 settings.window_rect = window_rect;
