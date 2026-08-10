@@ -71,6 +71,7 @@ else
     set(handles.com_serial_edit, 'String', sc.serial_pump_comport); 
     set(handles.trig_arduino_com_edit, 'String', sc.arduino_triggers_comport); 
     set(handles.lick_arduino_com_edit, 'String', sc.arduino_lickometer_comport); 
+    set(handles.eyetrack_ip_port_edit, 'String', [sc.eyetracker_IP ':' sc.eyetracker_port])
     set(handles.com_edit, 'String', sc.arduino_pump_comport); 
     set(handles.expt_params_edit, 'String', fullfile(sc.marmulator_base_dir, 'experiment_params'));  
     handles.base_dir = sc.marmulator_base_dir;

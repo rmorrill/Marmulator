@@ -7,7 +7,9 @@ save_dir_local = '/home/ryan/Data/Marmulator';
 %save_dir_remote = ''; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
 save_dir_remote = '/mnt/goedel_store01/rmorrill/Marmulator_data'; %'\\locker-smb.engram.rc.zi.columbia.edu\Data'; 
 
-eyetracker_toolbox_dir = ''; 
+%eyetracker_toolbox_dir = ''; % 2026-08-10 deprecated? confirm 
+eyetracker_IP = '129.85.17.222'; % as a str
+eyetracker_port = '35359'; %as a str 
 
 serial_pump_comport = '/dev/ttyUSB0'; 
 arduino_pump_comport = ''; 
@@ -56,7 +58,7 @@ setup_date = datestr(now, 'yyyy-mm-dd_HH-MM_SS');
 setup_save_path = fullfile(marmulator_base_dir, 'setup_config.mat'); 
 
 save(setup_save_path, 'marmulator_base_dir', 'save_dir_local',...
-    'save_dir_remote', 'eyetracker_toolbox_dir', 'serial_pump_comport',...
+    'save_dir_remote', 'eyetracker_IP', 'eyetracker_port', 'serial_pump_comport',...
     'session_pin', 'trial_pin', 'stim_pin', 'sampleCommand_pin', ...
     'arduino_pump_comport', 'arduino_lickometer_comport', 'arduino_triggers_comport',...
     'default_gaze_center_adjust', 'screenid_stim', 'screenid_ctrl', ...
