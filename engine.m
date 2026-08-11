@@ -6,7 +6,7 @@ function [eyetrack, calib, save_full] = engine(reward_pumphand, reward_arduino_p
     trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str,...
     img_seq, taskfilelist, eyetracker)
 
-profile_memory = true; % flag for tracking memory usage
+profile_memory = false; % flag for tracking memory usage
 
 %profile on -memory
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
