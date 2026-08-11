@@ -1524,12 +1524,14 @@ for i = 1:n_trs_tot
             pre_stim_timer = GetSecs() - stps;
             %[~,~,kCode] = KbCheck(0);
             [~,~,kCode] = KbCheck();
-            if find(kCode) == esc_key
+            %if find(kCode) == esc_key
+            if kCode(esc_key) %  RM fix after audit 2026-08-10
                 disp('ESC key recognized, exiting');
                 exit_flag = 1;
                 trial_aborted(i) = true;
                 break
-            elseif find(kCode) == bonus_rew_key
+            %elseif find(kCode) == bonus_rew_key
+            elseif kCode(bonus_rew_key) %  RM fix after audit 2026-08-10
                 if isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait
                     bonus_reward_t(end+1) = GetSecs() - t_start_sec;
                     %man_reward_ct = man_reward_ct + 1;
@@ -2175,19 +2177,22 @@ for i = 1:n_trs_tot
         
         %[~,~,kCode] = KbCheck(0);
         [~,~,kCode] = KbCheck();
-        if find(kCode) == esc_key
+        %if find(kCode) == esc_key
+        if kCode(esc_key) %  RM fix after audit 2026-08-10
             disp('ESC key recognized, exiting');
             exit_flag = 1;
             calib_end_t(i) =  GetSecs()-t_start_sec;
             trial_aborted(i) = true;
             break
-        elseif find(kCode) == rew_end_key
+        %elseif %find(kCode) == rew_end_key
+        elseif kCode(rew_end_key) %  RM fix after audit 2026-08-10
             manual_reward_t(i) =  GetSecs()-t_start_sec;
             man_reward_ct = man_reward_ct + 1;
             fprintf('manual reward with trial end! time = %0.3fs\n', manual_reward_t(i));
             end_stim = 1;
             manual_reward_flag = true;
-        elseif find(kCode) == bonus_rew_key
+        %elseif find(kCode) == bonus_rew_key
+        elseif kCode(bonus_rew_key) %  RM fix after audit 2026-08-10
             if  isempty(bonus_reward_t) || GetSecs() - bonus_reward_t(end) - t_start_sec > bonus_reward_min_wait
                 bonus_reward_t(end+1) = GetSecs() - t_start_sec;
                 %man_reward_ct = man_reward_ct + 1;
@@ -2328,7 +2333,9 @@ for i = 1:n_trs_tot
                             else
                                 reward_pumphand.digitalWrite(reward_arduino_pin, 1);
                                 WaitSecs(reward_on_dur);
-                                reward_pumphand.digitalWrite(10, 0);
+                                %reward_pumphand.digitalWrite(10, 0); RM
+                                %fix after audit 2026-08-10
+                                reward_pumphand.digitalWrite(reward_arduino_pin, 0);
                             end
                             %t1_rew = GetSecs();
                             %set(reward_today_hand, 'String', sprintf('%0.3f mL', (reward_ct + man_reward_ct)*reward_vol + start_reward_vol));
@@ -2617,7 +2624,7 @@ settings.computer_type = computer;
 settings.hostname = strtrim(hname);
 [~, WindowsVersion] = system('ver');
 settings.osversion = strtrim(WindowsVersion);
-settings.time_save = datestr(now, 'yyyy-dd-mm_HH-MM-SS');
+settings.time_save = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 settings.time_start = session_time;
 settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;

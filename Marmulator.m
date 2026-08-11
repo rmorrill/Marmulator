@@ -385,6 +385,7 @@ try
 catch me
     disp(getReport(me, 'extended'))
     set(gcbo, 'Enable', 'on')
+    return
 end
 
 if ~isempty(handles.subject_file)
