@@ -1360,6 +1360,11 @@ if profile_memory
 end
 
 %% RUN: start the stimulus loop %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+eye_capfile = fullfile(save_data_dir, ...
+                       sprintf('eyeraw_%s_%s.txt', subject, session_time));
+if use_eyetracker && ~isempty(eyetracker)
+    eyetracker.startCapture(eye_capfile);
+end
 
 Screen('FillRect', win, bg_col_val)
 seqidx = 0;
@@ -2328,11 +2333,11 @@ for i = 1:n_trs_tot
                             if reward_serial
                                 pumpReward_updateGUI();
                                 %writeline(reward_pumphand, 'RUN');
-                                
                                 %WaitSecs(reward_on_dur);
                             else
                                 reward_pumphand.digitalWrite(reward_arduino_pin, 1);
                                 WaitSecs(reward_on_dur);
+                                if use_eyetracker; eyetracker.drain(); end
                                 %reward_pumphand.digitalWrite(10, 0); RM
                                 %fix after audit 2026-08-10
                                 reward_pumphand.digitalWrite(reward_arduino_pin, 0);
@@ -2355,7 +2360,7 @@ for i = 1:n_trs_tot
                             drawGoodEyePts(0);
                         end
                         checkLick();
-                        
+                        if use_eyetracker; eyetracker.drain(); end
                         vbl = Screen('Flip', win, vbl + halfifi, dontclear, dontsync, multiflip);
                         if ctrl_screen; vbl2 = Screen('Flip', win_ctrl, vbl2 + halfifi, dontclear2, dontsync2, multiflip2); end
                     end
@@ -2385,6 +2390,7 @@ for i = 1:n_trs_tot
                     %drawInfoText(1);
                     drawBoundingBoxes();
                     checkLick();
+                    if use_eyetracker; eyetracker.drain(); end
                     if draw_retain_bb_pts
                         drawGoodEyePts(0);
                     end
@@ -2425,6 +2431,7 @@ for i = 1:n_trs_tot
 
     calib_frame_st_t{i} = frame_st_t;
     calib_frame_clip_num{i} = frame_clip_num;
+    if use_eyetracker; eyetracker.flushToDisk(); end
     if strcmp(stim_mode, 'movie')
         Screen('Close'); % RJM experimental
     end
@@ -2613,6 +2620,9 @@ eyetrack.cY = cY;
 eyetrack.quality = eyetracker_qual;
 eyetrack.pupil_size_x =  pupil_size_x;
 eyetrack.pupil_size_y =  pupil_size_y;
+if use_eyetracker && ~isempty(eyetracker)
+    eyetrack.hires = parse_eyetracker_raw(eyetracker.stopCapture());
+end
 
 %settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;
 settings.save_data_dir = save_data_dir;
@@ -2626,6 +2636,7 @@ settings.hostname = strtrim(hname);
 settings.osversion = strtrim(WindowsVersion);
 settings.time_save = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 settings.time_start = session_time;
+settings.t_start_sec = t_start_sec;
 settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
 settings.screenScale = setup_config.screenScale;
@@ -2691,24 +2702,8 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
 %% SUPPORT FUNCTIONS: nested
     function [eyeposx_cur, eyeposy_cur, eye_data_qual] = get_eyetracker_draw_dots()
         switch eye_method
-            % case 'pupil-glint'
-            %     [eyepos_x_tmp, eyepos_y_tmp] = vpx_GetDiffVector(eye);
-            %     eye_data_qual = vpx_GetDataQuality(eye);
-            %     [pupil_size_x(idx_all), pupil_size_y(idx_all)] = vpx_GetPupilSize(eye);
-            % case 'pupil'
-            %     [eyepos_x_tmp, eyepos_y_tmp] = vpx_GetPupilPoint(eye);
-            %     eye_data_qual = vpx_GetDataQuality(eye);
-            %     [pupil_size_x(idx_all), pupil_size_y(idx_all)] = vpx_GetPupilSize(eye);
-            % case 'gaze_point'
-            %     [eyepos_x_tmp, eyepos_y_tmp] = vpx_GetGazePoint(eye);
-            %     eye_data_qual = vpx_GetDataQuality(eye);
-            %     [pupil_size_x(idx_all), pupil_size_y(idx_all)] = vpx_GetPupilSize(eye);
-            % case 'gaze_point_corrected'
-            %     [eyepos_x_tmp, eyepos_y_tmp] = vpx_GetGazePointCorrected(eye);
-            %     eye_data_qual = vpx_GetDataQuality(eye);
-            %     [pupil_size_x(idx_all), pupil_size_y(idx_all)] = vpx_GetPupilSize(eye);
             case 'pupil'
-                pause(0.0001); % this allows eyetracker to check for data - is there a better way? 
+                %pause(0.0001); % this allows eyetracker to check for data - is there a better way? 
                 pupil = eyetracker.getData(); 
                 eyepos_x_tmp = pupil.x_pos; 
                 eyepos_y_tmp = pupil.y_pos; 
@@ -2725,7 +2720,7 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
                 eyepos_y_tmp = rand();
                 eye_data_qual = NaN;
                 eyetrack_tstamp_tmp = NaN; 
-                eye_rad_tmp = Nan; 
+                eye_rad_tmp = NaN; 
             case 'mouse'
                 [eyepos_x_tmp, eyepos_y_tmp] = GetMouse();
                 eye_data_qual = NaN;
