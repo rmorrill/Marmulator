@@ -26,7 +26,7 @@ sampleCommand_pin = []; % set to [] if you don't want it
 %default_gaze_center_adjust = [0, 210]; % [x, y]  positive x moves right; positive y moves down
 %default_gaze_center_adjust = [0,140]; % changed from this on 3/27/26
 %default_gaze_center_adjust = [40,70]; % Duchess adjustment
-default_gaze_center_adjust = [-35,-140]; % current Pancake adjustment
+default_gaze_center_adjust = [0,-140]; 
 %default_gaze_center_adjust = [0,0]; % for ISI
 
 screenid_stim = 1; 

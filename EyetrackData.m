@@ -68,6 +68,13 @@ classdef EyetrackData < handle
         function startCapture(obj, capfile)
         % Begin high-rate capture. Call once, immediately before the trial
         % loop -- AFTER stimulus loading, so startup gaps do not count.
+            % a previous session that errored out may have left a capture
+            % open; close it before claiming a new fid so the descriptor is
+            % not leaked
+            if obj.fid >= 0
+                try fclose(obj.fid); catch, end
+                obj.fid = -1;
+            end
             obj.capfile   = capfile;
             obj.fid       = fopen(capfile, 'w');
             if obj.fid < 0

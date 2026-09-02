@@ -2621,7 +2621,7 @@ eyetrack.quality = eyetracker_qual;
 eyetrack.pupil_size_x =  pupil_size_x;
 eyetrack.pupil_size_y =  pupil_size_y;
 if use_eyetracker && ~isempty(eyetracker)
-    eyetrack.hires = parse_eyetracker_raw(eyetracker.stopCapture());
+    eyetrack.hires = parse_eyetracker_raw(eyetracker.stopCapture(), eye_rect);
 end
 
 %settings.eyetracker_toolbox_dir = eyetracker_toolbox_dir;

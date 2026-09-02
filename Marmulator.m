@@ -384,6 +384,16 @@ try
         handles.eyetracker_obj);
 catch me
     disp(getReport(me, 'extended'))
+    % close out the hi-rate eye capture so the last trial's buffer reaches
+    % disk and the file handle is released; without this the eyetracker object
+    % survives in handles still marked capturing, and the next session's
+    % startCapture would overwrite the open fid.
+    try
+        if ~isempty(handles.eyetracker_obj) && isvalid(handles.eyetracker_obj)
+            handles.eyetracker_obj.stopCapture();
+        end
+    catch
+    end
     set(gcbo, 'Enable', 'on')
     return
 end
