@@ -22,7 +22,7 @@ function varargout = Marmulator(varargin)
 
 % Edit the above text to modify the response to help Marmulator
 
-% Last Modified by GUIDE v2.5 29-Mar-2024 18:50:01
+% Last Modified by GUIDE v2.5 14-Sep-2026 18:37:55
 
 % Begin initialization code - DO NOT EDIT
 gui_Singleton = 1;
@@ -307,6 +307,19 @@ if ~handles.trig_arduino_connected
     handles.trigger_arduino = [];
 end
 
+if get(handles.wait_for_2p_check, 'Value')
+    assert(handles.trig_arduino_connected, 'wait for 2p is checked but trigger arduino is not connected')
+    trig_read_pin = str2double(get(handles.trigger_read_pin_edit, 'String')); 
+    assert(~isnan(trig_read_pin), sprintf('trig read pin may not be numeric'))
+    handles.trigger_arduino.trig_2p_read_pin  = trig_read_pin; 
+    assign_2p_trig_pins(handles.trigger_arduino); 
+    fprintf('Will wait for 2p trigger on pin %d before stimulus start\n', trig_read_pin )
+    wait_for_2p_trig = true; 
+else
+    wait_for_2p_trig = false; 
+    fprintf('IMPORTANT: wait for 2p trigger is not checked, will not wait for trigger')
+end
+
 if ~handles.lick_arduino_connected
     handles.lick_arduino = [];
 end
@@ -381,7 +394,7 @@ try
         handles.reward_vol/1e3, punish_time_ms , break_after, n_rsvp, ...
         handles.trigger_arduino, handles.lick_arduino, handles.reward_selected,...
         handles.setup_config, training_notes_str, img_seq, taskfilelist, ...
-        handles.eyetracker_obj);
+        handles.eyetracker_obj, wait_for_2p_trig);
 catch me
     disp(getReport(me, 'extended'))
     set(gcbo, 'Enable', 'on')
@@ -1633,3 +1646,33 @@ end
 guidata(hObject, handles);
 
 
+% --- Executes on button press in wait_for_2p_check.
+function wait_for_2p_check_Callback(hObject, eventdata, handles)
+% hObject    handle to wait_for_2p_check (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hint: get(hObject,'Value') returns toggle state of wait_for_2p_check
+
+
+
+function trigger_read_pin_edit_Callback(hObject, eventdata, handles)
+% hObject    handle to trigger_read_pin_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    structure with handles and user data (see GUIDATA)
+
+% Hints: get(hObject,'String') returns contents of trigger_read_pin_edit as text
+%        str2double(get(hObject,'String')) returns contents of trigger_read_pin_edit as a double
+
+
+% --- Executes during object creation, after setting all properties.
+function trigger_read_pin_edit_CreateFcn(hObject, eventdata, handles)
+% hObject    handle to trigger_read_pin_edit (see GCBO)
+% eventdata  reserved - to be defined in a future version of MATLAB
+% handles    empty - handles not created until after all CreateFcns called
+
+% Hint: edit controls usually have a white background on Windows.
+%       See ISPC and COMPUTER.
+if ispc && isequal(get(hObject,'BackgroundColor'), get(0,'defaultUicontrolBackgroundColor'))
+    set(hObject,'BackgroundColor','white');
+end

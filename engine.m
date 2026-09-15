@@ -4,9 +4,17 @@ function [eyetrack, calib, save_full] = engine(reward_pumphand, reward_arduino_p
     require_fix_tr_init, fixation_to_init, time_out_trial_init_s, ...
     reward_today_hand, reward_vol, punish_length_ms, rsvp_break_after_t, n_rsvp, ...
     trigger_arduino, lick_arduino, reward_type, setup_config, training_notes_str,...
-    img_seq, taskfilelist, eyetracker)
+    img_seq, taskfilelist, eyetracker, wait_for_2p_trig)
 
 profile_memory = false; % flag for tracking memory usage
+
+%wait_for_2p_trig = true; 
+
+if wait_for_2p_trig 
+    Alphabet = 'abcdefghijklmnopqrstuvwxyz'; 
+    read_2ptrig_cmd = ['1' Alphabet(trigger_arduino.trig_2p_read_pin + 1)];
+    %lick_arduino_pin = lick_arduino.lick_pin;
+end
 
 %profile on -memory
 % if true, will place mem_used, avail_sys_mem, avail_phys_mem into base
@@ -1609,6 +1617,35 @@ for i = 1:n_trs_tot
         end
         stim_pre_end(i) = GetSecs() - t_start_sec;
     end
+
+    if wait_for_2p_trig && ~trial_init_timed_out(i)
+        % enter wait loop
+        % read pin state
+        fprintf('waiting for 2p trigger on pin %d...\n', trigger_arduino.trig_2p_read_pin);
+        IOPort('Flush', trig_hand);
+        t_wait_start = GetSecs();
+        prev_2p = check2pTrig();
+        while true
+            curr_2p = check2pTrig();
+            if prev_2p == 0 && curr_2p == 1
+                fprintf('2p trigger received after %0.4f s\n', GetSecs() - t_wait_start);
+                break
+            end
+            prev_2p = curr_2p;
+            [~, ~, kCode] = KbCheck();
+            if kCode(esc_key)
+                fprintf('wait aborted by user\n');
+                break
+            end
+            % if GetSecs() - t_wait_start > wait_2p_timeout_s
+            %     fprintf('2p trigger timed out after %g s\n', wait_2p_timeout_s);
+            %     break
+            % end
+        end
+
+        fprintf('PROCEED!\n')
+        
+    end
     
     if strcmp(stim_mode, 'moving_dot')
         curr_rect = stim_rect;
@@ -2920,6 +2957,18 @@ logData_bysession(log_dir,fullfile(save_data_dir, savefname));
             end
         end
     end
+
+    function frame_2p = check2pTrig()
+        % check for licks
+        t_2p1 = GetSecs(); 
+        IOPort('Write', trig_hand, read_2ptrig_cmd, 2);
+        pin_status = IOPort('Read', trig_hand,1,3);
+        %disp(pin_status)
+        frame_2p = pin_status(1)-48;
+        t_2p2 = GetSecs(); 
+        
+    end
+
 
     function pumpReward_updateGUI()
         writeline(reward_pumphand, 'RUN');
