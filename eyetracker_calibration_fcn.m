@@ -67,7 +67,8 @@ f1 = figure('Position', [16    62   948   1200], 'Color', 'w', 'Name', sprintf('
 n_x = 2;
 n_y = 9;
 
-subplot_er(n_y, n_x, 1); % raw points over time
+%subplot_er(n_y, n_x, 1); % raw points over time
+subplot(n_y, n_x, 1); % raw points over time
 scatter(x_data_raw, y_data_raw, 10, eyetrack.time);
 title('raw, color = time')
 ylabel('y');
@@ -161,7 +162,9 @@ figure(f1)
 outlier_thresh = 3;
 pts_keep = [];
 
-subplot_er(n_y, n_x, 2); % raw points with outliers marked w gray x
+%subplot_er(n_y, n_x, 2); % raw points with outliers marked w gray x %
+%RM2026-09-13
+subplot(n_y, n_x, 2);
 cla
 
 % if filter_by_eye_area
@@ -444,7 +447,8 @@ set(sp, 'XLim', xL_set);
 %% plot into main figure 
 figure(f1);
 
-subplot_er(n_y, n_x, 3); % plot of means +/- SD 
+%subplot_er(n_y, n_x, 3); % plot of means +/- SD 
+subplot(n_y, n_x, 3); % plot of means +/- SD %RM20260913
 mu_x_all = zeros(1,n_calib_pts);
 mu_y_all = zeros(1,n_calib_pts);
 mu_xy_all = zeros(1,n_calib_pts);
@@ -472,7 +476,9 @@ axis ij
 
 title('raw means +/- SDs, post-manual curation');
 %%
-subplot_er(n_y, n_x, 4); % stimulus positions
+%subplot_er(n_y, n_x, 4); % stimulus positions % RM20260913
+subplot(n_y, n_x, 4); % stimulus positions
+
 
 for i = 1:n_calib_pts
     plot(calib.pts(i, 1), calib.pts(i,2), 'Color', cols(i,:), 'Marker', 's', 'MarkerSize', 10, 'LineWidth', 1.5);
@@ -490,7 +496,8 @@ title('Stimulus grid positions on screen')
 
 %% X regress plot
 
-subplot_er(n_y, n_x, 5);
+%subplot_er(n_y, n_x, 5); % RM20260913
+subplot(n_y, n_x, 5);
 scatter(mu_x_all(mu_x_all~=0), calib_x(mu_x_all~=0), 20, cols(mu_x_all~=0, :), 'filled');
 
 xvals_eval = linspace(min(xlim), max(xlim), 10);
@@ -506,7 +513,8 @@ title('x regress');
 hold on
 
 %% Y regress plot
-subplot_er(n_y, n_x, 6);
+%subplot_er(n_y, n_x, 6); % RM20260913
+subplot(n_y, n_x, 6);
 scatter(mu_y_all(mu_y_all~=0), calib_y(mu_y_all~=0), 20, cols(mu_y_all~=0,:), 'filled');
 
 yvals_eval = linspace(min(xlim), max(xlim), 10);
@@ -605,13 +613,16 @@ coeff_Proj = [];
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
 figure(f1)
-subplot_er(n_y, n_x, 7); % cross-term means as dots 
+%subplot_er(n_y, n_x, 7); % cross-term means as dots 
+subplot(n_y, n_x, 7); % cross-term means as dots
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 8); %  cross-term, coefficients in text box
+%subplot_er(n_y, n_x, 8); %  cross-term, coefficients in text box
+subplot(n_y, n_x, 8); %  cross-term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 9); % cross-term, all points 
+%subplot_er(n_y, n_x, 9); % cross-term, all points 
+subplot(n_y, n_x, 9); % cross-term, all points 
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 if SAVE_CALIB
@@ -626,13 +637,16 @@ lin_reg_mode = 'no cross term';
 coeff_Proj = [];
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
-subplot_er(n_y, n_x, 11); % no cross-term means as dots 
+%subplot_er(n_y, n_x, 11); % no cross-term means as dots 
+subplot(n_y, n_x, 11); % no cross-term means as dots 
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 12); %  no cross-term, coefficients in text box
+%subplot_er(n_y, n_x, 12); %  no cross-term, coefficients in text box
+subplot(n_y, n_x, 12); %  no cross-term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 13); % no cross-term, all points 
+%subplot_er(n_y, n_x, 13); % no cross-term, all points 
+subplot(n_y, n_x, 13); % no cross-term, all points
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 
@@ -649,13 +663,16 @@ coeff_Proj = [];
 
 [coeff_X, coeff_Y] = calcTransform(lin_reg_mode, calib_x_locs, calib_y_locs, x_in, y_in, xy_in);
 
-subplot_er(n_y, n_x, 15); % cross term and xy term, means as dots 
+%subplot_er(n_y, n_x, 15); % cross term and xy term, means as dots 
+subplot(n_y, n_x, 15); % cross term and xy term, means as dots 
 plotMuEvalPts(lin_reg_mode, calib, calib_settings, coeff_X, coeff_Y, mu_x_all, mu_y_all, mu_xy_all, cols);
 
-subplot_er(n_y, n_x, 16); % cross term and xy term, coefficients in text box
+%subplot_er(n_y, n_x, 16); % cross term and xy term, coefficients in text box
+subplot(n_y, n_x, 16); % cross term and xy term, coefficients in text box
 writeCoeffsTextIntoBox(coeff_X, coeff_Y);
 
-subplot_er(n_y, n_x, 17); % cross term and xy term, all points 
+%subplot_er(n_y, n_x, 17); % cross term and xy term, all points 
+subplot(n_y, n_x, 17); % cross term and xy term, all points  
 plotAllEvalPts(calib_settings, pts_keep, lin_reg_mode, coeff_X, coeff_Y, cols, mu_x_all, mu_y_all, mu_xy_all);
 
 

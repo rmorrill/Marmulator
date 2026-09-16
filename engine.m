@@ -749,7 +749,25 @@ for i = 1:numel(aud_devs)
 end
 aud_dev_names = {aud_devs.DeviceName}; 
 
-this_dev_idx = find(contains(aud_dev_names, 'Rubix22')); 
+this_dev_idx = []; 
+if isfield(setup_config, 'aud_device_keyword')
+    aud_dev_keyword = setup_config.aud_device_keyword; 
+    fprintf('audio device keyword provided, will look for: %s\n', aud_dev_keyword); 
+    this_dev_idx = find(contains(aud_dev_names, aud_dev_keyword));
+    if ~isempty(this_dev_idx)
+        fprintf('Found audio device at index %d\n', this_dev_idx); 
+    else
+        warning('Audio device: %s NOT FOUND! Reverting to system default audio device', aud_dev_keyword); 
+    end
+end
+
+if isempty(this_dev_idx)
+    %this_dev_idx = find(contains(aud_dev_names, 'default'));
+    this_dev_idx = find(strcmp(aud_dev_names, 'default'));
+end
+
+%this_dev_idx = find(contains(aud_dev_names, 'Rubix22'));
+%this_dev_idx = find(contains(aud_dev_names, 'Steinberg'));
 % this_dev_idx = find(contains(aud_dev_names, 'default'));
 fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName); 
 
@@ -760,8 +778,8 @@ aud_y = repmat(aud_y',2/ninchannels,1);
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
 % ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
 
-devnr = -1; 
-% devnr = this_dev_idx-1; 
+%devnr = -1; 
+devnr = this_dev_idx-1; 
 % print("Using audio device %d\n", devnr)
 ppa_handle = PsychPortAudio('Open', devnr, 1, 1, PPA_fs,[], [],suggestedLat);
 
@@ -2432,7 +2450,9 @@ end
 
 Screen('FillRect', win, bg_col_val);
 if ctrl_screen; Screen('FillRect', win_ctrl, bg_col_val); end
-for j = 1:iti_frames*2
+
+
+for j = 1:round(median(iti_frames))*2 % RM - why? 
     vbl = Screen('Flip', win);
     if ctrl_screen; vbl2 = Screen('Flip', win_ctrl); end
 end
@@ -2628,9 +2648,9 @@ settings.time_save = datestr(now, 'yyyy-mm-dd_HH-MM-SS');
 settings.time_start = session_time;
 settings.run_time = GetSecs() - t_start_sec;
 settings.ifi_monitor = ifi;
-settings.screenScale = setup_config.screenScale;
-settings.screenPixels = setup_config.screenPixels;
-settings.screenPhysicalPixels = setup_config.screenPhysicalPixels;
+settings.screenScale = setup_config.screenScale; % DEPRECATED, NOT USED
+settings.screenPixels = setup_config.screenPixels; % DEPRECATED, NOT USED
+settings.screenPhysicalPixels = setup_config.screenPhysicalPixels; % DEPRECATED, NOT USED
 settings.screenInches = setup_config.screenInches;
 settings.viewportPPI = setup_config.viewportPPI;
 settings.deviceBrand = setup_config.deviceBrand;
