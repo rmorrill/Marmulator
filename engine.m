@@ -750,8 +750,8 @@ end
 aud_dev_names = {aud_devs.DeviceName}; 
 
 this_dev_idx = []; 
-if isfield(setup_config, 'aud_device_keyword')
-    aud_dev_keyword = setup_config.aud_device_keyword; 
+if isfield(setup_config, 'audio_device_keyword')
+    aud_dev_keyword = setup_config.audio_device_keyword; 
     fprintf('audio device keyword provided, will look for: %s\n', aud_dev_keyword); 
     this_dev_idx = find(contains(aud_dev_names, aud_dev_keyword));
     if ~isempty(this_dev_idx)
@@ -765,6 +765,7 @@ if isempty(this_dev_idx)
     %this_dev_idx = find(contains(aud_dev_names, 'default'));
     this_dev_idx = find(strcmp(aud_dev_names, 'default'));
 end
+
 
 %this_dev_idx = find(contains(aud_dev_names, 'Rubix22'));
 %this_dev_idx = find(contains(aud_dev_names, 'Steinberg'));
