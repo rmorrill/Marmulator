@@ -761,16 +761,13 @@ if isfield(setup_config, 'audio_device_keyword')
     end
 end
 
+% set devnr 
 if isempty(this_dev_idx)
-    %this_dev_idx = find(contains(aud_dev_names, 'default'));
-    this_dev_idx = find(strcmp(aud_dev_names, 'default'));
+    devnr = []; 
+else
+    fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName); 
+    devnr = this_dev_idx-1; 
 end
-
-
-%this_dev_idx = find(contains(aud_dev_names, 'Rubix22'));
-%this_dev_idx = find(contains(aud_dev_names, 'Steinberg'));
-% this_dev_idx = find(contains(aud_dev_names, 'default'));
-fprintf('Using audio device %s\n', aud_devs(this_dev_idx).DeviceName); 
 
 % reward
 [aud_y, PPA_fs] = psychwavread(reward_sound_file);
@@ -779,9 +776,6 @@ aud_y = repmat(aud_y',2/ninchannels,1);
 suggestedLat = []; % PsychPortAudio('GetDevices') LowOutputLatency
 % ppa_handle = PsychPortAudio('Open', 0, [], 1, aud_fs,2, [],suggestedLat);
 
-%devnr = -1; 
-devnr = this_dev_idx-1; 
-% print("Using audio device %d\n", devnr)
 ppa_handle = PsychPortAudio('Open', devnr, 1, 1, PPA_fs,[], [],suggestedLat);
 
 audio_handle(1) = PsychPortAudio('CreateBuffer', ppa_handle, aud_y);
