@@ -1392,6 +1392,7 @@ for i = 1:n_trs_tot
     seqidx = tr_seq(i);
     stfridx = 0;
     rsvpfridx = 0;
+    movtex = 0; % no valid movie texture yet on this trial
     rsvp_ctr = 1; 
     interrsvpfridx = 0;
     loop_brk_ctr = 0;
@@ -1852,7 +1853,7 @@ for i = 1:n_trs_tot
                             ppa_status = PsychPortAudio('GetStatus', ppa_handle);
                             if ~ppa_status.Active
                                 %PsychPortAudio('Volume', ppa_handle, 2)
-                                mti = Screen('GetMovieTimeIndex', moviePtr(img_idx)); 
+                                mti = Screen('GetMovieTimeIndex', moviePtr(img_idx));
                                 if mti < 0.01
                                     PsychPortAudio('Start', ppa_handle,1,vbl+ifi)
                                 end
@@ -1864,18 +1865,34 @@ for i = 1:n_trs_tot
                         end
 
                         movtex_new = Screen('GetMovieImage', win, moviePtr(img_idx), waitforimage);
-                        if movtex_new>0 
-                            if rsvpfridx > 1
+                        if movtex_new>0
+                            if movtex > 0
                                 Screen('Close', movtex);
-                                %delete(movtex)
                             end
                             movtex = movtex_new;
-                            mti = Screen('GetMovieTimeIndex', moviePtr(img_idx)); 
-                            fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx); 
-                            %Screen('Close', movtex_new);
+                            mti = Screen('GetMovieTimeIndex', moviePtr(img_idx));
+                            fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx);
+                        elseif movtex <= 0
+                            fprintf('DEBUG: no movie frame yet (GetMovieImage=%d), movie %d, frame %d, mti %0.4f\n', ...
+                                movtex_new, img_idx, stfridx, Screen('GetMovieTimeIndex', moviePtr(img_idx)));
                         end
+                        if movtex > 0
+                            Screen('DrawTexture', win, movtex, [],  stim_rect);
+                        end
+
+                        % movtex_new = Screen('GetMovieImage', win, moviePtr(img_idx), waitforimage);
+                        % if movtex_new>0
+                        %     if rsvpfridx > 1
+                        %         Screen('Close', movtex);
+                        %         %delete(movtex)
+                        %     end
+                        %     movtex = movtex_new;
+                        %     mti = Screen('GetMovieTimeIndex', moviePtr(img_idx));
+                        %     fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx);
+                        %     %Screen('Close', movtex_new);
+                        % end
                         %
-                        Screen('DrawTexture', win, movtex, [],  stim_rect);
+                        %Screen('DrawTexture', win, movtex, [],  stim_rect);
                         %Screen('Close', movtex_new)
 
                         %movtex_new = Screen('GetMovieImage', win, moviePtr(img_idx), waitforimage);
@@ -2445,8 +2462,9 @@ for i = 1:n_trs_tot
     calib_frame_st_t{i} = frame_st_t;
     calib_frame_clip_num{i} = frame_clip_num;
     if use_eyetracker; eyetracker.flushToDisk(); end
-    if strcmp(stim_mode, 'movie')
-        Screen('Close'); % RJM experimental
+    if strcmp(stim_mode, 'movie') && movtex > 0
+        Screen('Close', movtex);
+        movtex = 0;
     end
 end
 
