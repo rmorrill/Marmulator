@@ -868,7 +868,17 @@ if strcmp(stim_mode, 'movie')
         WaitSecs(0.1);
 
     end
+
+    % control-screen movie preview: stim and ctrl windows are on separate X screens and
+    % can't share textures, so frames are downscaled on the GPU, read back, and re-uploaded
+    ctrl_mov_every = 2; % refresh ctrl preview every Nth stim frame (2 -> 30 Hz)
+    if ctrl_screen
+        ctrl_mov_rect = round([0 0 stim_rect_size_x stim_rect_size_y]*shrink_factor);
+        ctrl_mov_offwin = Screen('OpenOffscreenWindow', win, 0, ctrl_mov_rect);
+        Screen('GetImage', ctrl_mov_offwin, [], [], 0, 3); % warm-up: first readback is slow
+    end
 end
+
 
 
 %% SETUP: AVMOVIES_IMAGES
@@ -1393,6 +1403,7 @@ for i = 1:n_trs_tot
     stfridx = 0;
     rsvpfridx = 0;
     movtex = 0; % no valid movie texture yet on this trial
+    movtex_ctrl = 0; % ctrl-screen copy of the current movie frame
     rsvp_ctr = 1; 
     interrsvpfridx = 0;
     loop_brk_ctr = 0;
@@ -1871,13 +1882,24 @@ for i = 1:n_trs_tot
                             end
                             movtex = movtex_new;
                             mti = Screen('GetMovieTimeIndex', moviePtr(img_idx));
-                            fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx);
+                            %fprintf('MovieTimeIndex is %0.4f, frame %d\n', mti, stfridx);
                         elseif movtex <= 0
                             fprintf('DEBUG: no movie frame yet (GetMovieImage=%d), movie %d, frame %d, mti %0.4f\n', ...
                                 movtex_new, img_idx, stfridx, Screen('GetMovieTimeIndex', moviePtr(img_idx)));
                         end
                         if movtex > 0
                             Screen('DrawTexture', win, movtex, [],  stim_rect);
+                            if ctrl_screen
+                                if movtex_new > 0 && (movtex_ctrl == 0 || mod(stfridx, ctrl_mov_every) == 0)
+                                    Screen('DrawTexture', ctrl_mov_offwin, movtex, [], ctrl_mov_rect);
+                                    ctrl_img = Screen('GetImage', ctrl_mov_offwin, [], [], 0, 3);
+                                    if movtex_ctrl > 0; Screen('Close', movtex_ctrl); end
+                                    movtex_ctrl = Screen('MakeTexture', win_ctrl, ctrl_img);
+                                end
+                                if movtex_ctrl > 0
+                                    Screen('DrawTexture', win_ctrl, movtex_ctrl, [], stim_rect*shrink_factor);
+                                end
+                            end
                         end
 
                         % movtex_new = Screen('GetMovieImage', win, moviePtr(img_idx), waitforimage);
@@ -2465,6 +2487,10 @@ for i = 1:n_trs_tot
     if strcmp(stim_mode, 'movie') && movtex > 0
         Screen('Close', movtex);
         movtex = 0;
+    end
+    if strcmp(stim_mode, 'movie') && ctrl_screen && movtex_ctrl > 0
+        Screen('Close', movtex_ctrl);
+        movtex_ctrl = 0;
     end
 end
 
